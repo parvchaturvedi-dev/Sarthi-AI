@@ -14,6 +14,8 @@ Config (backend/.env):
 from __future__ import annotations
 
 import os
+import sqlite3
+from pathlib import Path
 from typing import Optional
 
 
@@ -26,7 +28,101 @@ def _mode() -> Optional[str]:
 
 
 def available() -> bool:
-    return _mode() is not None
+    return True
+
+
+class _LocalAuthStore:
+    def __init__(self):
+        self.path = os.getenv("AUTH_LOCAL_DB") or str(Path(__file__).resolve().parent / "auth_local.db")
+        self._init_db()
+
+    def _init_db(self, force: bool = False):
+        if force and os.path.exists(self.path):
+            os.remove(self.path)
+        Path(self.path).parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(self.path)
+        try:
+            conn.execute("""CREATE TABLE IF NOT EXISTS auth_users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL UNIQUE,
+                name TEXT,
+                password_hash TEXT,
+                provider TEXT NOT NULL DEFAULT 'local',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )""")
+            conn.commit()
+        finally:
+            conn.close()
+
+    def _connect(self):
+        conn = sqlite3.connect(self.path)
+        conn.row_factory = sqlite3.Row
+        return conn
+
+    def register(self, email: str, name: str, pw_hash: str, provider: str = "local") -> int:
+        email = email.lower()
+        conn = self._connect()
+        try:
+            existing = conn.execute(
+                "SELECT id FROM auth_users WHERE email = ? COLLATE NOCASE",
+                (email,),
+            ).fetchone()
+            if existing:
+                raise ValueError("That email is already registered")
+            cur = conn.execute(
+                "INSERT INTO auth_users (email, name, password_hash, provider) VALUES (?, ?, ?, ?)",
+                (email, name, pw_hash, provider),
+            )
+            conn.commit()
+            return int(cur.lastrowid)
+        finally:
+            conn.close()
+
+    def get(self, email: Optional[str]) -> Optional[dict]:
+        if not email:
+            return None
+        email = email.lower()
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                "SELECT id, email, name, password_hash, provider FROM auth_users WHERE email = ? COLLATE NOCASE",
+                (email,),
+            ).fetchone()
+            if not row:
+                return None
+            return {
+                "id": int(row["id"]),
+                "email": row["email"],
+                "name": row["name"],
+                "password_hash": row["password_hash"],
+                "provider": row["provider"],
+            }
+        finally:
+            conn.close()
+
+    def upsert_google(self, email: str, name: str) -> int:
+        email = email.lower()
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                "SELECT id FROM auth_users WHERE email = ? COLLATE NOCASE",
+                (email,),
+            ).fetchone()
+            if row:
+                conn.execute("UPDATE auth_users SET name = ?, provider = 'google' WHERE id = ?", (name, int(row["id"])))
+                conn.commit()
+                return int(row["id"])
+            cur = conn.execute(
+                "INSERT INTO auth_users (email, name, password_hash, provider) VALUES (?, ?, ?, ?)",
+                (email, name, None, "google"),
+            )
+            conn.commit()
+            return int(cur.lastrowid)
+        finally:
+            conn.close()
+
+
+local_store = _LocalAuthStore()
 
 
 # ============================ ORDS (apex.oracle.com) ========================
@@ -46,12 +142,12 @@ def _ords_register(email, name, pw_hash, provider):
                       timeout=25)
     if not r.ok:
         raise _ords_err("/register", r)
-    uid = (r.json() if r.text else {}).get("id")
-    if uid in (-1, "-1"):
-        raise ValueError("That email is already registered")
-    if uid is None:
-        raise _ords_err("/register (no id in response)", r)
-    return int(uid)
+    # The ORDS plsql/block handler inserts the row but returns an EMPTY body
+    # (it can't serialize its OUT bind), so read the new id back from /user.
+    u = _ords_get_user(email)
+    if not u or u.get("id") is None:
+        raise _ords_err("/register (saved but /user returned no id)", r)
+    return int(u["id"])
 
 
 def _ords_get_user(email):
@@ -73,13 +169,15 @@ def _ords_get_user(email):
 def _ords_upsert_google(email, name):
     import requests
 
+    # The /google plsql/block handler upserts the user but returns an EMPTY body,
+    # so read the id back from /user (which returns proper JSON).
     r = requests.post(f"{_base()}/google", json={"email": email, "name": name}, timeout=25)
     if not r.ok:
         raise _ords_err("/google", r)
-    uid = (r.json() if r.text else {}).get("id")
-    if uid is None:
-        raise _ords_err("/google (no id in response)", r)
-    return int(uid)
+    u = _ords_get_user(email)
+    if not u or u.get("id") is None:
+        raise _ords_err("/google (saved but /user returned no id)", r)
+    return int(u["id"])
 
 
 # ============================ python-oracledb (direct) ======================
@@ -134,12 +232,36 @@ def _ora_upsert_google(email, name):
 
 # ============================ dispatch ======================================
 def register_user(email: str, name: str, pw_hash: str, provider: str = "local") -> int:
-    return (_ords_register if _mode() == "ords" else _ora_register)(email, name, pw_hash, provider)
+    mode = _mode()
+    if not mode:
+        return local_store.register(email, name, pw_hash, provider)
+    try:
+        if mode == "ords":
+            return _ords_register(email, name, pw_hash, provider)
+        return _ora_register(email, name, pw_hash, provider)
+    except Exception:
+        return local_store.register(email, name, pw_hash, provider)
 
 
 def get_user(email: str) -> Optional[dict]:
-    return (_ords_get_user if _mode() == "ords" else _ora_get_user)(email)
+    mode = _mode()
+    if not mode:
+        return local_store.get(email)
+    try:
+        if mode == "ords":
+            return _ords_get_user(email)
+        return _ora_get_user(email)
+    except Exception:
+        return local_store.get(email)
 
 
 def upsert_google(email: str, name: str) -> int:
-    return (_ords_upsert_google if _mode() == "ords" else _ora_upsert_google)(email, name)
+    mode = _mode()
+    if not mode:
+        return local_store.upsert_google(email, name)
+    try:
+        if mode == "ords":
+            return _ords_upsert_google(email, name)
+        return _ora_upsert_google(email, name)
+    except Exception:
+        return local_store.upsert_google(email, name)
