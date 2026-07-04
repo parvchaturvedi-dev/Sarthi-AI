@@ -10,6 +10,7 @@ bcrypt
 google-auth
 python-dotenv
 pymongo[srv]             # MongoDB driver — used when MONGODB_URI is set (Atlas)
+certifi                  # up-to-date CA bundle so Atlas TLS handshake works on Render
 # Only needed if you connect a REAL Oracle DB via ORACLE_DSN (not the apex/ORDS
 # path, which uses plain HTTPS). Uncomment if you set ORACLE_* instead of ORDS.
 # oracledb
