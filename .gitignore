@@ -1,0 +1,52 @@
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+
+# runtime data
+nova.db
+*.log
+models/
+recordings/
+screenshots/
+browser_profile/
+browser_profile*/
+
+# secrets / local config
+.env
+backend/.env
+frontend/.env.local
+config.local.yaml
+nova_settings.json
+nova_gmail_credentials.json
+gmail_tokens/
+google_tokens/
+
+# frontend
+frontend/node_modules/
+frontend/.next/
+node_modules/
+
+# mobile (Expo / React Native) — source is committed, build artifacts are NOT
+mobile/.expo/
+mobile/dist/
+mobile/web-build/
+**/.cxx/
+mobile/android/build/
+mobile/android/app/build/
+mobile/android/.gradle/
+mobile/android/.kotlin/
+mobile/android/local.properties
+mobile/ios/build/
+mobile/ios/Pods/
+*.keystore
+*.jks
+mobile/android/app/google-services.json
+
+# extra secrets / local
+config.local.yaml
+backend/config.local.yaml
+*.pem
+.DS_Store

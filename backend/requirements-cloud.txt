@@ -1,0 +1,14 @@
+# Slim deps for the Render "accounts API" (cloud.py) — NO desktop/GUI packages.
+# The full desktop backend uses requirements.txt (pyautogui/pywin32/whisper/...),
+# which cannot install or run on a Linux server.
+fastapi
+uvicorn[standard]
+pydantic
+requests
+PyJWT
+bcrypt
+google-auth
+python-dotenv
+# Only needed if you connect a REAL Oracle DB via ORACLE_DSN (not the apex/ORDS
+# path, which uses plain HTTPS). Uncomment if you set ORACLE_* instead of ORDS.
+# oracledb

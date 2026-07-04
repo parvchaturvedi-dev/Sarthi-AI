@@ -1,0 +1,17 @@
+# --- Core (already present on this machine) ---
+numpy
+requests
+pyyaml
+pyttsx3            # Windows SAPI5 text-to-speech (offline)
+pyautogui          # keyboard/mouse control
+pygetwindow        # active-window inspection (verify step)
+pywin32            # win32gui etc.
+
+# --- Voice input (install to enable the mic) ---
+# pip install faster-whisper sounddevice
+faster-whisper     # speech-to-text (GPU via CTranslate2)
+sounddevice        # microphone capture
+
+# --- Optional, later ---
+# openwakeword     # "Hey Nova" wake word
+# piper-tts        # higher-quality neural TTS

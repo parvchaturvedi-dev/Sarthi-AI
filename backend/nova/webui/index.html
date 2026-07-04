@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Nova</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1b2230; --muted:#8b91a1; --muted-2:#a3a9b6; --sub:#606776;
+    --line:#edeff3; --line-2:#e6e9ef; --row:#f2f4f7;
+    --hover:#f4f6f9; --active:#f1f4f8; --chip:#f6f7fa;
+    --accent:#2f7ff0; --accent-ink:#2a5fb8; --accent-soft:#d8e6fb;
+    --grad:linear-gradient(135deg,#2f7ff0,#2a6fd0);
+    --ai:linear-gradient(95deg,#7b5bff,#e05cc6);
+    --accent-shadow:rgba(47,127,240,.30);
+  }
+  *{box-sizing:border-box; margin:0; padding:0}
+  html,body{height:100%}
+  body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;
+    background:#fff; color:var(--ink); font-size:15px; display:flex; overflow:hidden}
+  button,input,textarea{font-family:inherit}
+  ::-webkit-scrollbar{width:8px} ::-webkit-scrollbar-thumb{background:#d7dbe3; border-radius:8px}
+  input::placeholder,textarea::placeholder{color:#a7adba}
+  .hidden{display:none !important}
+
+  /* ==================== SIDEBAR ==================== */
+  .side{width:282px; flex-shrink:0; background:#fff; border-right:1px solid var(--line);
+    display:flex; flex-direction:column; transition:width .2s ease}
+  body.collapsed .side{width:76px}
+  body.collapsed .side .lbl,
+  body.collapsed .side .hist,
+  body.collapsed .side .upgrade{display:none}
+  body.collapsed .side .navitem{justify-content:center}
+
+  .brandrow{display:flex; align-items:center; gap:11px; padding:20px 18px 14px}
+  .logo{width:34px; height:34px; border-radius:50%; flex-shrink:0;
+    background:linear-gradient(140deg,#8ea2ff,#5b6ee0); box-shadow:0 2px 6px rgba(91,110,224,.3)}
+  .brandrow .name{font-weight:800; font-size:16px; letter-spacing:-.01em}
+  .collapsebtn{margin-left:auto; width:26px; height:26px; border:none; background:none;
+    color:#9aa0ad; cursor:pointer; display:grid; place-items:center; border-radius:7px}
+  .collapsebtn:hover{background:#f2f4f8; color:var(--ink)}
+  body.collapsed .collapsebtn svg{transform:scaleX(-1)}
+
+  nav{padding:6px 12px 0; display:flex; flex-direction:column; gap:3px}
+  .navitem{display:flex; align-items:center; gap:12px; padding:10px 14px; border-radius:10px;
+    font-size:14.5px; font-weight:500; white-space:nowrap; overflow:hidden; cursor:pointer;
+    color:var(--sub); text-decoration:none; transition:background .12s,color .12s}
+  .navitem:hover{background:var(--hover)}
+  .navitem.on{background:var(--active); color:var(--ink); font-weight:700}
+  .navitem .ic{width:20px; height:20px; flex-shrink:0; display:grid; place-items:center}
+
+  .hist{flex:1; overflow-y:auto; overflow-x:hidden; padding:8px 12px 12px; margin-top:6px}
+  .hist .lbl{padding:16px 12px 8px; font-size:12px; color:var(--muted-2); font-weight:700; letter-spacing:.02em}
+  .hist .item{padding:9px 12px; border-radius:9px; color:var(--sub); font-size:13.5px; font-weight:500;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer}
+  .hist .item:hover{background:var(--hover); color:var(--ink)}
+  .hist .item.on{background:var(--active); color:var(--ink)}
+
+  .upgrade{margin:0 14px 12px; padding:16px; border-radius:14px; background:#f5f7fa; border:1px solid var(--line)}
+  .upgrade .t{font-weight:700; font-size:13.5px; margin-bottom:2px}
+  .upgrade .d{color:#8b91a1; font-size:12.5px; margin-bottom:12px}
+  .upgrade button{width:100%; padding:9px; border:none; border-radius:999px; color:#fff;
+    font-weight:700; font-size:13.5px; cursor:pointer; background:var(--grad); box-shadow:0 4px 12px var(--accent-shadow)}
+  .upgrade button:hover{filter:brightness(1.05)}
+
+  .settingsrow{margin:0 12px 14px}
+
+  /* ==================== MAIN ==================== */
+  .main{flex:1; min-width:0; position:relative; display:flex; flex-direction:column;
+    background:linear-gradient(180deg,#fafcff,#ffffff 260px)}
+  .scroll{flex:1; overflow-y:auto}
+  .wrap{max-width:920px; margin:0 auto; padding:44px 36px 150px}
+
+  /* hero */
+  .hero{margin-bottom:30px}
+  .hero .hi{font-size:33px; font-weight:800; letter-spacing:-.02em; line-height:1.15; margin-bottom:4px}
+  .hero .hi mark{background:var(--accent-soft); color:var(--accent-ink); padding:1px 8px; border-radius:7px}
+  .hero .q{font-size:33px; font-weight:700; letter-spacing:-.02em; line-height:1.15; color:#aeb4c0}
+
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-bottom:18px}
+  .card{background:#fff; border:1px solid var(--line); border-radius:16px; padding:20px 22px;
+    box-shadow:0 1px 2px rgba(16,24,40,.03)}
+  .card .ch{display:flex; align-items:center; gap:8px; color:var(--muted); font-size:13.5px; font-weight:600; margin-bottom:16px}
+  .card .row{display:flex; align-items:center; gap:11px; padding:6px 0; cursor:pointer; border-radius:8px}
+  .card .row:hover{background:#f7f9fc}
+  .card .fico{width:26px; height:26px; border-radius:7px; flex-shrink:0; display:grid; place-items:center; background:#eef3fb; color:#2f7ff0}
+  .card .fico svg{width:15px; height:15px}
+  .card .rt{font-size:14px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .caps{display:flex; flex-direction:column; gap:12px}
+  .cap{display:flex; align-items:center; gap:11px; color:#4b5262; font-size:13.5px; font-weight:500}
+  .capic{width:30px; height:30px; border-radius:8px; flex-shrink:0; display:grid; place-items:center; background:#f2f8ff; color:#2f7ff0}
+  .capic svg{width:16px; height:16px}
+
+  .suggest{background:#fff; border:1px solid var(--line); border-radius:16px; padding:18px 22px 20px;
+    box-shadow:0 1px 2px rgba(16,24,40,.03); cursor:pointer; transition:border-color .15s,box-shadow .15s}
+  .suggest:hover{border-color:#d5dbe6; box-shadow:0 4px 14px rgba(16,24,40,.06)}
+  .suggest .ch{display:flex; align-items:center; gap:8px; color:var(--muted); font-size:13px; font-weight:600; margin-bottom:12px}
+  .suggest .st{font-size:17px; font-weight:700; letter-spacing:-.01em}
+  .spark{width:15px; height:15px; flex-shrink:0}
+
+  /* chat */
+  .thread{max-width:820px; margin:0 auto; padding:34px 24px 20px; display:flex; flex-direction:column; gap:20px}
+  .msg{display:flex; gap:12px}
+  .msg.user{flex-direction:row-reverse}
+  .msg .av{width:30px; height:30px; border-radius:50%; flex-shrink:0}
+  .msg.user .av{background:linear-gradient(140deg,#8ea2ff,#5b6ee0)}
+  .msg.nova .av{background:var(--ai)}
+  .msg .bubble{padding:12px 16px; border-radius:16px; line-height:1.6; max-width:80%; font-size:14.5px}
+  .msg.user .bubble{background:#eef3fb; border-bottom-right-radius:5px}
+  .msg.nova .bubble{background:#f6f7fa; border-bottom-left-radius:5px}
+  .msg.nova .bubble.think{color:var(--muted); font-style:italic}
+  .bubble pre{background:#0e1524; color:#e6e9f2; border-radius:10px; padding:12px 14px; overflow-x:auto;
+    margin:8px 0; font-family:"Cascadia Code",Consolas,monospace; font-size:13px}
+  .bubble code{font-family:"Cascadia Code",Consolas,monospace; font-size:.92em}
+
+  /* composer */
+  .composer{position:absolute; left:0; right:0; bottom:0; padding:20px 36px 26px;
+    background:linear-gradient(to top,#fff 62%,rgba(255,255,255,0)); pointer-events:none}
+  .composer .inner{max-width:920px; margin:0 auto; pointer-events:auto}
+  .bar{display:flex; align-items:center; gap:14px; background:#fff; border:1px solid var(--line-2);
+    border-radius:999px; padding:11px 12px 11px 20px; box-shadow:0 8px 30px rgba(24,39,75,.10)}
+  .bar .plus{position:relative; flex-shrink:0; width:22px; height:22px; display:grid; place-items:center; cursor:pointer; color:#7b5bff}
+  .bar input{flex:1; min-width:0; border:none; background:none; outline:none; font-size:15px; color:var(--ink); padding:4px 0}
+  .iconbtn{flex-shrink:0; width:38px; height:38px; border-radius:50%; border:none; display:grid; place-items:center; cursor:pointer}
+  .iconbtn.ghost{background:var(--hover); color:#9aa0ad}
+  .iconbtn.ghost:hover{color:var(--accent)}
+  .iconbtn.send{color:#fff; background:var(--grad); box-shadow:0 4px 12px var(--accent-shadow)}
+  .iconbtn.send:hover{filter:brightness(1.06)}
+
+  /* settings */
+  .settings{max-width:760px; margin:0 auto; padding:40px 36px}
+  .settings h1{font-size:26px; font-weight:800; letter-spacing:-.02em; margin-bottom:4px}
+  .settings .sub{color:var(--muted); margin-bottom:26px}
+  .sec{background:#fff; border:1px solid var(--line); border-radius:16px; padding:22px; margin-bottom:18px; box-shadow:0 1px 2px rgba(16,24,40,.03)}
+  .sec h2{font-size:15px; font-weight:700; margin-bottom:4px}
+  .sec p{color:var(--muted); font-size:13px; margin-bottom:16px}
+  .modes{display:flex; gap:14px}
+  .mode{flex:1; border:1.5px solid var(--line); border-radius:14px; padding:16px; cursor:pointer; transition:.15s}
+  .mode:hover{border-color:#cfd6e2}
+  .mode.on{border-color:var(--accent); background:#f2f8ff}
+  .mode .t{font-weight:700; margin-bottom:5px; display:flex; align-items:center; gap:8px}
+  .mode .d{color:var(--muted); font-size:12.5px; line-height:1.5}
+  .mdot{width:9px; height:9px; border-radius:50%; background:#cdd3df}
+  .mode.on .mdot{background:var(--accent); box-shadow:0 0 8px var(--accent-shadow)}
+
+  .conn{display:flex; align-items:center; gap:13px; padding:14px 0; border-top:1px solid var(--line)}
+  .conn:first-of-type{border-top:none}
+  .conn .cic{width:36px; height:36px; border-radius:10px; display:grid; place-items:center; background:#fff; border:1px solid var(--line)}
+  .conn .cic img{width:20px; height:20px}
+  .soon{margin-left:auto; font-size:11.5px; font-weight:700; color:#9aa0ad; background:var(--chip); padding:6px 13px; border-radius:999px}
+  .conn .cname{font-weight:700; font-size:13.5px}
+  .conn .cstat{font-size:12px; color:var(--muted)}
+  .conn.done .cstat{color:#12a18c}
+  .conn .cbtn{margin-left:auto; padding:8px 15px; border-radius:10px; font-size:12.5px; font-weight:700; cursor:pointer;
+    color:#fff; border:none; background:var(--grad); box-shadow:0 4px 12px var(--accent-shadow)}
+  .conn .cbtn:hover{filter:brightness(1.05)}
+  .cform{display:none; padding:12px 2px 4px}
+  .cform.open{display:block}
+  .cform .hint{color:#7a808f; font-size:12px; line-height:1.75}
+  .cform code{background:var(--chip); padding:1px 6px; border-radius:5px}
+  a.link{color:var(--accent); text-decoration:none}
+</style>
+</head>
+<body>
+  <!-- ==================== SIDEBAR ==================== -->
+  <aside class="side">
+    <div class="brandrow">
+      <span class="logo"></span>
+      <span class="name lbl">Nova</span>
+      <button class="collapsebtn" id="collapse" title="Collapse">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="11 7 6 12 11 17"></polyline><polyline points="18 7 13 12 18 17"></polyline></svg>
+      </button>
+    </div>
+
+    <nav>
+      <a class="navitem on" id="nav-home" data-view="home">
+        <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg></span>
+        <span class="lbl">Home</span>
+      </a>
+      <a class="navitem" id="nav-new">
+        <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"></path><line x1="12" y1="9" x2="12" y2="14"></line><line x1="9.5" y1="11.5" x2="14.5" y2="11.5"></line></svg></span>
+        <span class="lbl">New Chat</span>
+      </a>
+    </nav>
+
+    <div class="hist">
+      <div class="lbl">CHATS</div>
+      <div id="chats"></div>
+    </div>
+
+    <div class="upgrade" id="upgrade">
+      <div class="t">Nova Automation</div>
+      <div class="d">Connect Gmail to let Nova work in the background</div>
+      <button id="up-btn">Set up</button>
+    </div>
+
+    <a class="navitem settingsrow" id="nav-settings" data-view="settings">
+      <span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></span>
+      <span class="lbl">Settings</span>
+    </a>
+  </aside>
+
+  <!-- ==================== MAIN ==================== -->
+  <main class="main">
+    <div class="scroll" id="scroll">
+
+      <!-- HOME -->
+      <div class="wrap" id="home-view">
+        <div class="hero">
+          <div class="hi"><mark>Welcome</mark></div>
+          <div class="q">How can I help you today?</div>
+        </div>
+
+        <div class="grid2">
+          <div class="card">
+            <div class="ch">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v4M16 3v4M3 10h18M5 6h14a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z"></path></svg>
+              Recent chats
+            </div>
+            <div id="recent-chats"></div>
+          </div>
+          <div class="card">
+            <div class="ch">
+              <svg class="spark" width="16" height="16" viewBox="0 0 24 24" fill="#2f7ff0" stroke="none"><path d="M12 2c.5 3.8 2.2 5.5 6 6-3.8.5-5.5 2.2-6 6-.5-3.8-2.2-5.5-6-6 3.8-.5 5.5-2.2 6-6z"></path></svg>
+              What Nova can do
+            </div>
+            <div class="caps">
+              <div class="cap"><span class="capic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg></span> Control your PC — open apps, type, search, screenshot</div>
+              <div class="cap"><span class="capic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"></rect><path d="m22 7-10 6L2 7"></path></svg></span> Send email directly via Gmail (Automation)</div>
+              <div class="cap"><span class="capic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18"></path><path d="M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18z"></path></svg></span> Search the web and answer</div>
+              <div class="cap"><span class="capic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg></span> Chat with memory of past conversations</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid2" id="suggests">
+          <div class="suggest" data-prompt="Write a professional email for me">
+            <div class="ch"><svg class="spark" viewBox="0 0 24 24" fill="#2f7ff0" stroke="none"><path d="M12 2c.5 3.8 2.2 5.5 6 6-3.8.5-5.5 2.2-6 6-.5-3.8-2.2-5.5-6-6 3.8-.5 5.5-2.2 6-6z"></path></svg>Suggested</div>
+            <div class="st">Write an email</div>
+          </div>
+          <div class="suggest" data-prompt="Open notepad and write a to-do list">
+            <div class="ch"><svg class="spark" viewBox="0 0 24 24" fill="#2f7ff0" stroke="none"><path d="M12 2c.5 3.8 2.2 5.5 6 6-3.8.5-5.5 2.2-6 6-.5-3.8-2.2-5.5-6-6 3.8-.5 5.5-2.2 6-6z"></path></svg>Suggested</div>
+            <div class="st">Make a to-do list</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CHAT -->
+      <div class="thread hidden" id="thread"></div>
+
+      <!-- SETTINGS -->
+      <div class="settings hidden" id="settings-view">
+        <h1>Settings</h1>
+        <div class="sub">Control how Nova works.</div>
+
+        <div class="sec">
+          <h2>AI Model (Brain)</h2>
+          <p>Choose how Sarthi thinks. <b>Run locally</b> keeps everything on your PC — your data never leaves. Or plug in your own <b>API key</b> for a top cloud model. Image, PDF &amp; memory always stay on-device.</p>
+          <div class="modes">
+            <div class="mode" id="brain-local" data-bmode="local">
+              <div class="t"><span class="mdot"></span> Run locally &middot; private</div>
+              <div class="d">Qwen / GPT-OSS on your own GPU. Offline — nothing leaves your PC.</div>
+            </div>
+            <div class="mode" id="brain-api" data-bmode="api">
+              <div class="t"><span class="mdot"></span> Use an API key</div>
+              <div class="d">ChatGPT, Claude, Gemini or Grok — paste one key.</div>
+            </div>
+          </div>
+
+          <div class="cform" id="brain-local-form" style="margin-top:14px">
+            <label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Local model</label>
+            <select id="brain-model-local" style="width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;font-size:14px;background:#fff"></select>
+          </div>
+
+          <div class="cform hidden" id="brain-api-form" style="margin-top:14px">
+            <label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Provider</label>
+            <select id="brain-provider" style="width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;font-size:14px;background:#fff">
+              <option value="openai">ChatGPT — OpenAI</option>
+              <option value="claude">Claude — Anthropic</option>
+              <option value="gemini">Gemini — Google</option>
+              <option value="grok">Grok — xAI</option>
+            </select>
+            <label style="font-weight:600;font-size:13px;display:block;margin:12px 0 6px">Model <span style="color:var(--muted);font-weight:400">(optional — blank = default)</span></label>
+            <input id="brain-model-api" placeholder="e.g. gpt-4o-mini / claude-sonnet-5 / gemini-2.0-flash" style="width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;font-size:14px">
+            <label style="font-weight:600;font-size:13px;display:block;margin:12px 0 6px">API key</label>
+            <input id="brain-key" type="password" placeholder="paste your key (stored locally, never shown again)" style="width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;font-size:14px">
+          </div>
+
+          <div style="margin-top:14px;display:flex;align-items:center;gap:12px">
+            <button class="cbtn" id="brain-save">Save</button>
+            <span id="brain-status" class="cstat"></span>
+          </div>
+        </div>
+
+        <div class="sec">
+          <h2>Mode</h2>
+          <p>PC Controlling = Nova sees the screen and operates apps itself. Automation = where a connector is set up (like Gmail), it acts directly in the background — without showing anything.</p>
+          <div class="modes">
+            <div class="mode" id="mode-pc" data-mode="pc_control">
+              <div class="t"><span class="mdot"></span> PC Controlling</div>
+              <div class="d">Sees the screen, searches and acts — on any app.</div>
+            </div>
+            <div class="mode" id="mode-auto" data-mode="automation">
+              <div class="t"><span class="mdot"></span> Automation</div>
+              <div class="d">Works directly via API in connected apps (Gmail) — silently. PC control elsewhere.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <h2>Connections</h2>
+          <p>Connect once, then Nova handles it in the background. One Google login connects Gmail, Calendar, Drive & Contacts.</p>
+
+          <div class="conn google-conn"><div class="cic"><img src="https://www.google.com/s2/favicons?domain=mail.google.com&sz=64" onerror="this.style.display='none'" alt="Gmail"></div><div><div class="cname">Gmail</div><div class="cstat gstat">Not connected</div></div><button class="cbtn gbtn">Add connection</button></div>
+          <div class="conn google-conn"><div class="cic"><img src="https://www.google.com/s2/favicons?domain=calendar.google.com&sz=64" onerror="this.style.display='none'" alt="Google Calendar"></div><div><div class="cname">Google Calendar</div><div class="cstat gstat">Not connected</div></div><button class="cbtn gbtn">Add connection</button></div>
+          <div class="conn google-conn"><div class="cic"><img src="https://www.google.com/s2/favicons?domain=drive.google.com&sz=64" onerror="this.style.display='none'" alt="Google Drive"></div><div><div class="cname">Google Drive</div><div class="cstat gstat">Not connected</div></div><button class="cbtn gbtn">Add connection</button></div>
+          <div class="conn google-conn"><div class="cic"><img src="https://www.google.com/s2/favicons?domain=contacts.google.com&sz=64" onerror="this.style.display='none'" alt="Contacts"></div><div><div class="cname">Contacts</div><div class="cstat gstat">Not connected</div></div><button class="cbtn gbtn">Add connection</button></div>
+
+          <div class="cform" id="google-setup">
+            <div class="hint">
+              <b style="color:var(--ink)">One-time setup (OAuth app):</b><br>
+              1. <a class="link" href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a> → new project<br>
+              2. Enable Gmail, Calendar, Drive & People APIs · 3. OAuth consent (External) → add your email as a test user<br>
+              4. Credentials → OAuth client ID → <b>Desktop app</b> → download JSON<br>
+              5. Save it in the project folder as <code>nova_gmail_credentials.json</code>, then click "Add connection".
+            </div>
+          </div>
+
+          <div class="conn"><div class="cic"><img src="https://www.google.com/s2/favicons?domain=whatsapp.com&sz=64" onerror="this.style.display='none'" alt="WhatsApp"></div><div><div class="cname">WhatsApp</div><div class="cstat">Coming soon</div></div><span class="soon">Soon</span></div>
+          <div class="conn"><div class="cic"><img src="https://www.google.com/s2/favicons?domain=linkedin.com&sz=64" onerror="this.style.display='none'" alt="LinkedIn"></div><div><div class="cname">LinkedIn</div><div class="cstat">Coming soon</div></div><span class="soon">Soon</span></div>
+          <div class="conn"><div class="cic"><img src="https://www.google.com/s2/favicons?domain=telegram.org&sz=64" onerror="this.style.display='none'" alt="Telegram"></div><div><div class="cname">Telegram</div><div class="cstat">Coming soon</div></div><span class="soon">Soon</span></div>
+          <div class="conn"><div class="cic"><img src="https://www.google.com/s2/favicons?domain=slack.com&sz=64" onerror="this.style.display='none'" alt="Slack"></div><div><div class="cname">Slack</div><div class="cstat">Coming soon</div></div><span class="soon">Soon</span></div>
+          <div class="conn"><div class="cic"><img src="https://www.google.com/s2/favicons?domain=discord.com&sz=64" onerror="this.style.display='none'" alt="Discord"></div><div><div class="cname">Discord</div><div class="cstat">Coming soon</div></div><span class="soon">Soon</span></div>
+          <div class="conn"><div class="cic"><img src="https://www.google.com/s2/favicons?domain=outlook.com&sz=64" onerror="this.style.display='none'" alt="Outlook"></div><div><div class="cname">Outlook</div><div class="cstat">Coming soon</div></div><span class="soon">Soon</span></div>
+          <div class="conn"><div class="cic"><img src="https://www.google.com/s2/favicons?domain=github.com&sz=64" onerror="this.style.display='none'" alt="GitHub"></div><div><div class="cname">GitHub</div><div class="cstat">Coming soon</div></div><span class="soon">Soon</span></div>
+          <div class="conn"><div class="cic"><img src="https://www.google.com/s2/favicons?domain=notion.so&sz=64" onerror="this.style.display='none'" alt="Notion"></div><div><div class="cname">Notion</div><div class="cstat">Coming soon</div></div><span class="soon">Soon</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- COMPOSER (shared: home + chat) -->
+    <div class="composer" id="composer">
+      <div class="inner">
+        <div class="bar">
+          <span class="plus" title="Attach">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="6" x2="12" y2="18"></line><line x1="6" y1="12" x2="18" y2="12"></line></svg>
+          </span>
+          <input id="input" autocomplete="off" placeholder="Ask Nova anything, or tell it a task…" />
+          <button class="iconbtn ghost" id="voice" title="Voice">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line></svg>
+          </button>
+          <button class="iconbtn send" id="send" title="Send">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+<script src="/app.js"></script>
+</body>
+</html>

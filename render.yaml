@@ -1,0 +1,37 @@
+# Render Blueprint — deploys the ACCOUNTS API + the Next.js frontend.
+# The full desktop backend (PC control, voice, local models) is NOT deployed here;
+# it runs on your own PC. This gives production HTTPS so Google Sign-In works.
+#
+# In Render: New + -> Blueprint -> pick this repo. Then set the env vars marked
+# "sync: false" in each service's dashboard.
+
+services:
+  # ---- Accounts API (login / register / google / guest) --------------------
+  - type: web
+    name: sarthi-auth
+    runtime: python
+    rootDir: backend
+    plan: free
+    buildCommand: "pip install -r requirements-cloud.txt"
+    startCommand: "uvicorn cloud:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: JWT_SECRET
+        generateValue: true          # Render makes a strong random secret
+      - key: ORDS_BASE_URL           # your apex ORDS auth base, e.g.
+        sync: false                  #   https://oracleapex.com/ords/novadb/nova/auth
+      - key: GOOGLE_LOGIN_CLIENT_ID  # the Google "Web" OAuth client ID
+        sync: false
+
+  # ---- Frontend (Next.js) --------------------------------------------------
+  - type: web
+    name: sarthi-frontend
+    runtime: node
+    rootDir: frontend
+    plan: free
+    buildCommand: "npm install && npm run build"
+    startCommand: "./node_modules/.bin/next start -p $PORT"
+    envVars:
+      - key: NEXT_PUBLIC_API         # set to the sarthi-auth URL after it deploys
+        sync: false                  #   e.g. https://sarthi-auth.onrender.com
+      - key: NEXT_PUBLIC_GOOGLE_CLIENT_ID
+        sync: false                  # same Google Web client ID as above

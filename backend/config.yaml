@@ -1,0 +1,60 @@
+# Nova — voice-first AI OS core. Windows desktop slice.
+# Copy to config.local.yaml to override without touching this file.
+
+assistant:
+  name: Sarthi
+  wake_word: "hey sarthi"        # used by keyword wake (later); hotkey works today
+  language: english              # hinglish (Roman, casual) | hindi (Devanagari) | english
+
+brain:
+  provider: ollama               # ollama | rules  (rules = offline fallback)
+  ollama_url: http://127.0.0.1:11434
+  model: qwen2.5:7b-instruct-q4_K_M   # any tool-friendly instruct model you have pulled
+  vision_model: qwen2.5vl:3b     # VLM that SEES the screen in the operate-any-app loop (auto-used if pulled)
+  embed_model: nomic-embed-text  # embeddings for semantic (RAG) memory recall
+  timeout_s: 120                 # generous for cold model loads on a small GPU
+  fallback_to_rules: true        # if Ollama is unreachable, use the rule-based planner
+  stream: true                   # speak each sentence as it generates (fast first reply)
+
+voice:
+  tts:
+    engine: edge                # edge = natural Hindi neural (online) | sapi (offline) | pyttsx3
+    voice: hi-IN-SwaraNeural    # hi-IN-SwaraNeural (F) | hi-IN-MadhurNeural (M) | en-IN-NeerjaNeural
+    rate: 185                   # used by sapi/pyttsx3
+  stt:
+    engine: faster_whisper       # requires: pip install faster-whisper sounddevice
+    model: base                  # multilingual (handles Hinglish): base | small | medium
+    device: cuda                 # cuda (fast, auto-falls back to CPU if it errors) | cpu | auto
+    language: en                 # en = Roman output (matches command triggers); "" = auto-detect
+    end_silence_ms: 700          # reply this many ms after you STOP speaking
+    record_seconds: 6            # legacy fixed-window fallback (unused by the VAD path)
+
+wake:
+  enabled: false                 # true = always-on "Hey Nova" listening
+  backend: keyword               # keyword (matches 'nova' via STT) | openwakeword
+  chunk_seconds: 1.5             # keyword: window length per check
+  energy_threshold: 0.012        # keyword: RMS below this is treated as silence
+  oww_model: hey_jarvis          # openwakeword: pretrained trigger, or a hey_nova.onnx path
+  threshold: 0.5                 # openwakeword: detection score cutoff
+
+agent:
+  dry_run: false                 # true = plan + speak but never touch the OS
+  step_pause_s: 0.6              # settle time between UI actions
+  confirm_sensitive: true       # ask before payments / deletes / sending messages
+
+search:
+  enabled: true                  # live web search via LangSearch (JARVIS-style live answers)
+  api_key: ""                    # LangSearch key -> put it in config.local.yaml (git-ignored), not here
+  results: 5                     # how many web results to ground the answer on
+  timeout_s: 20
+
+browser:
+  managed: true                  # true = Nova's own persistent browser (tabs reused, login saved)
+  profile: browser_profile       # folder for the browser profile (git-ignored)
+
+memory:
+  db_path: nova.db
+
+ui:
+  hotkey: "ctrl+alt+n"           # push-to-talk / activate
+  always_on_top: true
