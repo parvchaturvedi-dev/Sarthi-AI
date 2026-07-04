@@ -33,6 +33,12 @@ export default function Dashboard() {
         setSid(cur.id); setMsgs(cur.turns); setView(cur.turns.length ? "chat" : "home");
         loadSessions();
       } catch { logout(); router.replace("/login"); return; }
+      // if we just got back from Google OAuth, jump straight into Settings so
+      // the user sees the freshly-connected state.
+      if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("connected") === "google") {
+        try { setSettings(await api("/api/settings")); setView("settings"); } catch {}
+        window.history.replaceState({}, "", "/");
+      }
       setReady(true);
     })();
   }, [router]);
@@ -61,7 +67,17 @@ export default function Dashboard() {
   }
   const openSettings = useCallback(async()=>{ setView("settings"); try{ setSettings(await api("/api/settings")); }catch{} },[]);
   async function setMode(mode){ setSettings(s=>({...s,mode})); await api("/api/settings",{method:"POST",body:JSON.stringify({mode})}); }
-  async function connectGoogle(){ try{ const r=await api("/api/connectors/google/connect",{method:"POST"}); if(r.error==="setup_needed"){ alert("Add nova_gmail_credentials.json in backend/ first (see steps in Settings)."); return; } setSettings(await api("/api/settings")); }catch(e){ alert(e.message); } }
+  async function connectGoogle(){
+    try{
+      const r = await api("/api/connectors/google/connect", { method: "POST" });
+      if (r.error === "setup_needed") {
+        alert("Google Web OAuth not configured on the cloud backend yet. Ask the admin to set GOOGLE_WEB_CLIENT_ID / GOOGLE_WEB_CLIENT_SECRET in Render.");
+        return;
+      }
+      if (r.auth_url) { window.location.href = r.auth_url; return; }
+      setSettings(await api("/api/settings"));
+    } catch(e) { alert(e.message); }
+  }
 
   if (!ready) return <div style={{minHeight:"100vh",display:"grid",placeItems:"center",color:"#8b91a1"}}>Loading…</div>;
   const user = getUser() || {};

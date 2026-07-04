@@ -39,8 +39,9 @@ class GoogleIn(BaseModel):
 def _issue(user: dict) -> dict:
     import jwt
 
+    # PyJWT 2.9+ enforces RFC 7519: `sub` must be a string.
     payload = {
-        "sub": user["id"], "email": user["email"], "name": user.get("name"),
+        "sub": str(user["id"]), "email": user["email"], "name": user.get("name"),
         "exp": int(time.time()) + 7 * 86400,
     }
     token = jwt.encode(payload, _secret(), algorithm="HS256")

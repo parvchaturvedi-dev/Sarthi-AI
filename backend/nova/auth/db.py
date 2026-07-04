@@ -127,25 +127,23 @@ local_store = _LocalAuthStore()
 _MG_READY = False
 _MG_USERS = None
 _MG_COUNTERS = None
+_MG_CHATS = None
+_MG_MESSAGES = None
+_MG_TOKENS = None
 
 
 def _mg_init():
-    global _MG_READY, _MG_USERS, _MG_COUNTERS
+    global _MG_READY, _MG_USERS, _MG_COUNTERS, _MG_CHATS, _MG_MESSAGES, _MG_TOKENS
     if _MG_READY:
         return
     import pymongo
 
     uri = os.getenv("MONGODB_URI", "")
     kwargs = {"serverSelectionTimeoutMS": 10000}
-    # Atlas (mongodb+srv://) needs TLS with a good CA bundle. Plain mongodb://
-    # (Railway TCP proxy, self-hosted, etc.) is plain TCP — no TLS.
     if uri.startswith("mongodb+srv://"):
         import certifi
         kwargs["tls"] = True
         kwargs["tlsCAFile"] = certifi.where()
-        # Escape hatch for cloud containers whose OpenSSL refuses Atlas TLS 1.3
-        # even with a good CA bundle. Password still travels over the encrypted
-        # tunnel; only cert VERIFICATION is skipped.
         if os.getenv("MONGODB_TLS_INSECURE", "").strip() in ("1", "true", "yes"):
             kwargs["tlsAllowInvalidCertificates"] = True
             kwargs["tlsAllowInvalidHostnames"] = True
@@ -153,7 +151,13 @@ def _mg_init():
     db = client[os.getenv("MONGODB_DB", "sarthi")]
     _MG_USERS = db["users"]
     _MG_COUNTERS = db["counters"]
+    _MG_CHATS = db["chats"]
+    _MG_MESSAGES = db["messages"]
+    _MG_TOKENS = db["google_tokens"]
     _MG_USERS.create_index("email", unique=True)
+    _MG_CHATS.create_index([("user_id", 1), ("updated_at", -1)])
+    _MG_MESSAGES.create_index([("chat_id", 1), ("_id", 1)])
+    _MG_TOKENS.create_index("user_id", unique=True)
     _MG_READY = True
 
 
@@ -233,3 +237,104 @@ def upsert_google(email: str, name: str) -> int:
     if _mode() == "mongo":
         return _mg_upsert_google(email, name)
     return local_store.upsert_google(email, name)
+
+
+# ============================ per-user cloud data (Mongo only) ==============
+# Chats, messages, and OAuth tokens live in MongoDB and are keyed by user_id
+# from the JWT — never accept a user_id from the request body.
+
+def _next(counter_name: str) -> int:
+    _mg_init()
+    from pymongo import ReturnDocument
+    r = _MG_COUNTERS.find_one_and_update(
+        {"_id": counter_name}, {"$inc": {"seq": 1}},
+        upsert=True, return_document=ReturnDocument.AFTER,
+    )
+    return int(r["seq"])
+
+
+def create_chat(user_id: int, title: str = "New chat") -> dict:
+    _mg_init()
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    doc = {"_id": _next("chat_id"), "user_id": int(user_id),
+           "title": title, "created_at": now, "updated_at": now}
+    _MG_CHATS.insert_one(doc)
+    return {"id": doc["_id"], "title": title, "user_id": int(user_id)}
+
+
+def list_chats(user_id: int, limit: int = 50) -> list:
+    _mg_init()
+    return [
+        {"id": int(c["_id"]), "title": c.get("title", "New chat")}
+        for c in _MG_CHATS.find({"user_id": int(user_id)})
+                          .sort("updated_at", -1).limit(limit)
+    ]
+
+
+def get_chat(user_id: int, chat_id: int) -> dict | None:
+    _mg_init()
+    c = _MG_CHATS.find_one({"_id": int(chat_id), "user_id": int(user_id)})
+    if not c:
+        return None
+    msgs = list(_MG_MESSAGES.find({"chat_id": int(chat_id)}).sort("_id", 1))
+    return {
+        "id": int(c["_id"]),
+        "title": c.get("title", "New chat"),
+        "turns": [{"role": m["role"], "content": m["content"]} for m in msgs],
+    }
+
+
+def latest_chat(user_id: int) -> dict | None:
+    _mg_init()
+    c = _MG_CHATS.find_one({"user_id": int(user_id)}, sort=[("updated_at", -1)])
+    if not c:
+        return None
+    return get_chat(user_id, int(c["_id"]))
+
+
+def add_message(user_id: int, chat_id: int, role: str, content: str) -> None:
+    _mg_init()
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    _MG_MESSAGES.insert_one({
+        "_id": _next("msg_id"), "chat_id": int(chat_id),
+        "user_id": int(user_id), "role": role, "content": content,
+        "created_at": now,
+    })
+    # first user message becomes the title
+    update = {"$set": {"updated_at": now}}
+    if role == "user":
+        chat = _MG_CHATS.find_one({"_id": int(chat_id)})
+        if chat and (chat.get("title") in (None, "", "New chat")):
+            update["$set"]["title"] = content[:42]
+    _MG_CHATS.update_one({"_id": int(chat_id), "user_id": int(user_id)}, update)
+
+
+# --- Google OAuth tokens (per user, one row per user_id) --------------------
+def save_google_tokens(user_id: int, email: str, access_token: str,
+                       refresh_token: str | None, expires_at) -> None:
+    _mg_init()
+    from datetime import datetime, timezone
+    doc = {
+        "user_id": int(user_id), "email": email,
+        "access_token": access_token, "refresh_token": refresh_token,
+        "expires_at": expires_at, "updated_at": datetime.now(timezone.utc),
+    }
+    _MG_TOKENS.update_one({"user_id": int(user_id)}, {"$set": doc}, upsert=True)
+
+
+def get_google_tokens(user_id: int) -> dict | None:
+    _mg_init()
+    doc = _MG_TOKENS.find_one({"user_id": int(user_id)})
+    if not doc:
+        return None
+    return {"email": doc.get("email"),
+            "access_token": doc.get("access_token"),
+            "refresh_token": doc.get("refresh_token"),
+            "expires_at": doc.get("expires_at")}
+
+
+def delete_google_tokens(user_id: int) -> None:
+    _mg_init()
+    _MG_TOKENS.delete_one({"user_id": int(user_id)})
