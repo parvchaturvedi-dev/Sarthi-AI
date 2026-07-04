@@ -17,8 +17,8 @@ services:
     envVars:
       - key: JWT_SECRET
         generateValue: true          # Render makes a strong random secret
-      - key: ORDS_BASE_URL           # your apex ORDS auth base, e.g.
-        sync: false                  #   https://oracleapex.com/ords/novadb/nova/auth
+      - key: MONGODB_URI             # MongoDB Atlas connection string
+        sync: false                  #   mongodb+srv://user:pass@cluster.xxx.mongodb.net/
       - key: GOOGLE_LOGIN_CLIENT_ID  # the Google "Web" OAuth client ID
         sync: false
 
