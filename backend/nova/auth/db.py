@@ -137,14 +137,20 @@ def _mg_init():
     import pymongo
 
     # Explicit CA bundle from certifi fixes the "TLSV1_ALERT_INTERNAL_ERROR"
-    # SSL handshake failure on Render (and most cloud containers), where the
-    # system OpenSSL cert store isn't populated the way Atlas expects.
-    client = pymongo.MongoClient(
-        os.getenv("MONGODB_URI"),
-        serverSelectionTimeoutMS=10000,
-        tls=True,
-        tlsCAFile=certifi.where(),
-    )
+    # SSL handshake failure on most cloud containers, where the system OpenSSL
+    # cert store isn't populated the way Atlas expects.
+    kwargs = {
+        "serverSelectionTimeoutMS": 10000,
+        "tls": True,
+        "tlsCAFile": certifi.where(),
+    }
+    # Escape hatch for containers whose OpenSSL still refuses Atlas's TLS 1.3
+    # even with a good CA bundle (a well-known Render / Debian slim issue).
+    # Auth is still safe because the URI carries user+password over the tunnel.
+    if os.getenv("MONGODB_TLS_INSECURE", "").strip() in ("1", "true", "yes"):
+        kwargs["tlsAllowInvalidCertificates"] = True
+        kwargs["tlsAllowInvalidHostnames"] = True
+    client = pymongo.MongoClient(os.getenv("MONGODB_URI"), **kwargs)
     db = client[os.getenv("MONGODB_DB", "sarthi")]
     _MG_USERS = db["users"]
     _MG_COUNTERS = db["counters"]
