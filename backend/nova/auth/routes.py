@@ -57,13 +57,17 @@ def register(body: RegisterIn):
     _ensure_oracle()
     import bcrypt
 
-    if db.get_user(body.email):
-        raise HTTPException(400, "That email is already registered")
     pw_hash = bcrypt.hashpw(body.password.encode(), bcrypt.gensalt()).decode()
     try:
+        if db.get_user(body.email):
+            raise HTTPException(400, "That email is already registered")
         uid = db.register_user(body.email, body.name, pw_hash, "local")
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(400, str(e))
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"Accounts backend error: {e}")
     return _issue({"id": uid, "email": body.email.lower(), "name": body.name})
 
 
@@ -79,7 +83,10 @@ def login(body: LoginIn):
     _ensure_oracle()
     import bcrypt
 
-    u = db.get_user(body.email)
+    try:
+        u = db.get_user(body.email)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"Accounts backend error: {e}")
     if not u or not u.get("password_hash") or not bcrypt.checkpw(
         body.password.encode(), u["password_hash"].encode()
     ):
@@ -104,7 +111,10 @@ def google(body: GoogleIn):
     email = info.get("email")
     if not email:
         raise HTTPException(401, "Google account has no email")
-    uid = db.upsert_google(email, info.get("name", ""))
+    try:
+        uid = db.upsert_google(email, info.get("name", ""))
+    except Exception as e:  # noqa: BLE001 - surface the real accounts-backend error
+        raise HTTPException(502, f"Accounts backend error: {e}")
     return _issue({"id": uid, "email": email.lower(), "name": info.get("name", "")})
 
 
