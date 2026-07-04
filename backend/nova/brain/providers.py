@@ -263,6 +263,22 @@ DEFAULT_MODELS = {
     "grok": "grok-2-latest",
     "claude": "claude-sonnet-5",
     "gemini": "gemini-2.0-flash",
+    "groq": "llama-3.3-70b-versatile",
+}
+
+# Models offered in the chatbox dropdown for each provider (curated, current-ish).
+PROVIDER_MODELS = {
+    "openai": ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini", "o3-mini"],
+    "claude": ["claude-sonnet-5", "claude-opus-4-8", "claude-3-5-haiku-latest"],
+    "gemini": ["gemini-2.0-flash", "gemini-2.5-pro", "gemini-1.5-flash"],
+    "grok": ["grok-2-latest", "grok-beta"],
+    "groq": ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768"],
+}
+
+# friendly labels for the UI
+PROVIDER_LABELS = {
+    "openai": "ChatGPT (OpenAI)", "claude": "Claude (Anthropic)",
+    "gemini": "Gemini (Google)", "grok": "Grok (xAI)", "groq": "Groq",
 }
 
 
@@ -276,6 +292,9 @@ def build_chat_client(provider: str, model: str, api_key: str, timeout_s: int = 
     if p in ("grok", "xai"):
         return OpenAICompatClient(api_key, model or DEFAULT_MODELS["grok"],
                                   "https://api.x.ai/v1", timeout_s, "grok")
+    if p in ("groq",):
+        return OpenAICompatClient(api_key, model or DEFAULT_MODELS["groq"],
+                                  "https://api.groq.com/openai/v1", timeout_s, "groq")
     if p in ("claude", "anthropic"):
         return AnthropicClient(api_key, model or DEFAULT_MODELS["claude"], timeout_s)
     if p in ("gemini", "google"):

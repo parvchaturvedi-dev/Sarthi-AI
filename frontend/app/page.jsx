@@ -23,7 +23,19 @@ export default function Dashboard() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [settings, setSettings] = useState(null);
+  const [modelGroups, setModelGroups] = useState([]);   // providers with saved keys
+  const [model, setModel] = useState("");               // selected "provider:model"
+  const [savedKeys, setSavedKeys] = useState([]);       // [{provider,label,model}]
+  const [keyDrafts, setKeyDrafts] = useState({});       // provider -> typed key
   const scroll = useRef(null);
+
+  const PROVIDERS = [
+    ["openai", "ChatGPT (OpenAI)", "sk-..."],
+    ["claude", "Claude (Anthropic)", "sk-ant-..."],
+    ["gemini", "Gemini (Google)", "AIza..."],
+    ["grok", "Grok (xAI)", "xai-..."],
+    ["groq", "Groq", "gsk_..."],
+  ];
 
   useEffect(() => {
     if (!getToken()) { router.replace("/login"); return; }
@@ -32,6 +44,7 @@ export default function Dashboard() {
         const cur = await api("/api/session/current");
         setSid(cur.id); setMsgs(cur.turns); setView(cur.turns.length ? "chat" : "home");
         loadSessions();
+        loadModels();
       } catch { logout(); router.replace("/login"); return; }
       // if we just got back from Google OAuth, jump straight into Settings so
       // the user sees the freshly-connected state.
@@ -45,6 +58,28 @@ export default function Dashboard() {
   useEffect(() => { if (scroll.current) scroll.current.scrollTop = scroll.current.scrollHeight; }, [msgs, view]);
 
   async function loadSessions(){ try { setSessions((await api("/api/sessions")).sessions); } catch {} }
+  async function loadModels(){
+    try {
+      const [m, k] = await Promise.all([api("/api/models"), api("/api/keys")]);
+      setModelGroups(m.groups || []);
+      setSavedKeys(k.providers || []);
+      // pick a default selection if none chosen yet
+      const first = (m.groups || [])[0]?.models?.[0]?.id;
+      setModel((cur) => cur || first || "");
+    } catch {}
+  }
+  async function saveKey(provider){
+    const val = (keyDrafts[provider] || "").trim();
+    if (!val) { alert("Paste the API key first."); return; }
+    try {
+      await api("/api/keys", { method:"POST", body: JSON.stringify({ provider, api_key: val }) });
+      setKeyDrafts(d => ({ ...d, [provider]: "" }));
+      await loadModels();
+    } catch(e){ alert(e.message); }
+  }
+  async function removeKey(provider){
+    try { await api("/api/keys/" + provider, { method:"DELETE" }); await loadModels(); } catch(e){ alert(e.message); }
+  }
   async function newChat(){ const d = await api("/api/session/new",{method:"POST"}); setSid(d.id); setMsgs([]); setView("home"); loadSessions(); }
   async function openSession(id){ const d = await api("/api/session/"+id); setSid(id); setMsgs(d.turns); setView("chat"); loadSessions(); }
   async function send(text){
@@ -52,7 +87,7 @@ export default function Dashboard() {
     setInput(""); setSending(true); setView("chat");
     setMsgs(m=>[...m,{role:"user",content:text},{role:"assistant",content:"…",think:true}]);
     try{
-      const d=await api("/api/chat",{method:"POST",body:JSON.stringify({text,session_id:sid})});
+      const d=await api("/api/chat",{method:"POST",body:JSON.stringify({text,session_id:sid,model})});
       setSid(d.session_id);
       setMsgs(m=>{
         const base=m.filter(x=>!x.think);
@@ -198,6 +233,36 @@ export default function Dashboard() {
           <div className={"settings" + (view === "settings" ? "" : " hidden")}>
             <h1>Settings</h1>
             <div className="sub">Control how Sarthi works.</div>
+
+            <div className="sec">
+              <h2>AI Models</h2>
+              <p>Paste your own API key for any provider. Add as many as you like — then pick which one to use from the dropdown in the chat box. Keys are stored encrypted, per account.</p>
+              {PROVIDERS.map(([prov, label, ph]) => {
+                const saved = savedKeys.find(k => k.provider === prov);
+                return (
+                  <div key={prov} className="conn" style={{ flexWrap:"wrap" }}>
+                    <div style={{ flex:1, minWidth:180 }}>
+                      <div className="cname">{label}</div>
+                      <div className="cstat">{saved ? "✓ Key saved — appears in the model picker" : "Not connected"}</div>
+                    </div>
+                    {saved ? (
+                      <button className="cbtn" onClick={() => removeKey(prov)} style={{ borderColor:"#f3d0d0", color:"#dc2626" }}>Remove</button>
+                    ) : (
+                      <div style={{ display:"flex", gap:8, width:"100%", marginTop:8 }}>
+                        <input
+                          type="password" placeholder={ph}
+                          value={keyDrafts[prov] || ""}
+                          onChange={(e) => setKeyDrafts(d => ({ ...d, [prov]: e.target.value }))}
+                          style={{ flex:1, padding:"9px 12px", border:"1px solid var(--line,#e5e7eb)", borderRadius:10, fontSize:14 }}
+                        />
+                        <button className="cbtn" onClick={() => saveKey(prov)}>Save</button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
             <div className="sec">
               <h2>Mode</h2>
               <p>PC Controlling = Sarthi sees the screen and operates apps itself. Automation = where a connector is set up (like Gmail), it acts directly in the background — without showing anything.</p>
@@ -237,9 +302,20 @@ export default function Dashboard() {
         <div className={"composer" + (view === "settings" ? " hidden" : "")}>
           <div className="inner">
             <form className="bar" onSubmit={(e) => { e.preventDefault(); send(); }}>
-              <span className="plus" title="Attach">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><line x1="12" y1="6" x2="12" y2="18"/><line x1="6" y1="12" x2="18" y2="12"/></svg>
-              </span>
+              {modelGroups.length > 0 ? (
+                <select value={model} onChange={(e) => setModel(e.target.value)} title="Model"
+                  style={{ border:"1px solid var(--line,#e5e7eb)", borderRadius:10, padding:"6px 8px", fontSize:12.5, background:"#fff", maxWidth:150 }}>
+                  {modelGroups.map(g => (
+                    <optgroup key={g.provider} label={g.label}>
+                      {g.models.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                    </optgroup>
+                  ))}
+                </select>
+              ) : (
+                <span className="plus" title="Add a model key in Settings" onClick={openSettings} style={{cursor:"pointer"}}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><line x1="12" y1="6" x2="12" y2="18"/><line x1="6" y1="12" x2="18" y2="12"/></svg>
+                </span>
+              )}
               <input value={input} onChange={(e) => setInput(e.target.value)} autoComplete="off" placeholder="Ask Sarthi anything, or tell it a task…" />
               <button type="button" className="iconbtn ghost" title="Voice">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>

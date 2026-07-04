@@ -74,6 +74,7 @@ class ChatIn(BaseModel):
     text: str
     session_id: Optional[int] = None
     speak: bool = False
+    model: str = ""            # "provider:model" chosen in the chat box
 
 
 @app.get("/api/session/current")
@@ -108,33 +109,43 @@ def session_get(sid: int, user: dict = Depends(current_user)):
     return chat
 
 
-def _brain_reply(history: list, text: str) -> str:
-    """One-turn chat reply. Uses OpenAI if OPENAI_API_KEY is set; else a canned
-    portal message pointing users to the desktop / mobile apps for the full
-    assistant (PC control, voice, vision)."""
-    key = os.getenv("OPENAI_API_KEY", "").strip()
-    model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-    if not key:
-        return ("Sarthi's full assistant (PC control, voice, vision) runs on your "
-                "own PC or phone. This website chats too — set OPENAI_API_KEY on "
-                "the cloud backend to enable a live brain here.")
-    import requests
+def _brain_reply(uid: int, history: list, text: str, model_sel: str) -> str:
+    """Reply using the user's OWN saved API key for the selected provider.
 
-    messages = [{"role": "system", "content": "You are Sarthi, a friendly assistant."}]
+    `model_sel` is "provider:model" (e.g. "openai:gpt-4o") or just "provider".
+    Falls back to whichever provider the user has a key for; if none, a message
+    telling them to add a key in Settings.
+    """
+    from nova.brain.providers import build_chat_client
+
+    provider, _, model = (model_sel or "").partition(":")
+    provider = provider.strip().lower()
+
+    saved = db.list_api_keys(uid)               # [{provider, model}]
+    have = {k["provider"] for k in saved}
+    if not have:
+        return ("No AI model connected yet. Go to Settings -> AI Models, paste an "
+                "API key for ChatGPT / Claude / Gemini / Grok / Groq, then pick it "
+                "in the chat box.")
+    if provider not in have:                    # pick a sane default
+        provider = next(iter(have))
+        model = ""
+
+    keyrow = db.get_api_key(uid, provider)
+    if not keyrow or not keyrow.get("api_key"):
+        return f"No saved key for {provider}. Add one in Settings -> AI Models."
+    model = model or keyrow.get("model") or ""
+
+    client = build_chat_client(provider, model, keyrow["api_key"])
+    if client is None:
+        return f"Unsupported provider: {provider}"
+
+    messages = [{"role": "system", "content": "You are Sarthi, a helpful assistant."}]
     for m in (history or [])[-12:]:
         messages.append({"role": m["role"], "content": m["content"]})
     messages.append({"role": "user", "content": text})
-    try:
-        r = requests.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-            json={"model": model, "messages": messages, "temperature": 0.7},
-            timeout=60,
-        )
-        r.raise_for_status()
-        return (r.json()["choices"][0]["message"]["content"] or "").strip()
-    except Exception as e:  # noqa: BLE001
-        return f"(brain error: {e})"
+    out = client.chat_text(messages)
+    return out or f"(no reply from {provider} — check your key/model in Settings)"
 
 
 @app.post("/api/chat")
@@ -144,15 +155,69 @@ def chat_send(body: ChatIn, user: dict = Depends(current_user)):
     if not sid:
         sid = db.create_chat(uid)["id"]
     else:
-        # ensure this chat belongs to the user
         if db.get_chat(uid, int(sid)) is None:
             raise HTTPException(404, "Chat not found")
-    # save the user's message
     db.add_message(uid, int(sid), "user", body.text)
     history = db.get_chat(uid, int(sid))["turns"]
-    reply = _brain_reply(history, body.text)
+    reply = _brain_reply(uid, history, body.text, body.model or "")
     db.add_message(uid, int(sid), "assistant", reply)
     return {"session_id": int(sid), "replies": [reply], "pending": None}
+
+
+# --- per-user AI model keys -------------------------------------------------
+class KeyIn(BaseModel):
+    provider: str
+    api_key: str
+    model: str = ""
+
+
+@app.get("/api/keys")
+def keys_list(user: dict = Depends(current_user)):
+    """Which providers the user has a key for (never returns the key value)."""
+    from nova.brain.providers import PROVIDER_LABELS
+    saved = db.list_api_keys(_uid(user))
+    return {
+        "providers": [
+            {"provider": k["provider"],
+             "label": PROVIDER_LABELS.get(k["provider"], k["provider"]),
+             "model": k.get("model", "")}
+            for k in saved
+        ]
+    }
+
+
+@app.post("/api/keys")
+def keys_save(body: KeyIn, user: dict = Depends(current_user)):
+    from nova.brain.providers import PROVIDER_MODELS
+    prov = body.provider.strip().lower()
+    if prov not in PROVIDER_MODELS:
+        raise HTTPException(400, f"Unknown provider '{body.provider}'")
+    if not body.api_key.strip():
+        raise HTTPException(400, "API key is empty")
+    db.save_api_key(_uid(user), prov, body.api_key.strip(), body.model.strip())
+    return {"ok": True, "provider": prov}
+
+
+@app.delete("/api/keys/{provider}")
+def keys_delete(provider: str, user: dict = Depends(current_user)):
+    db.delete_api_key(_uid(user), provider.strip().lower())
+    return {"ok": True}
+
+
+@app.get("/api/models")
+def models_available(user: dict = Depends(current_user)):
+    """Models for the chat-box dropdown — ONLY providers the user has a key for."""
+    from nova.brain.providers import PROVIDER_LABELS, PROVIDER_MODELS
+    saved = {k["provider"] for k in db.list_api_keys(_uid(user))}
+    groups = []
+    for prov in saved:
+        models = PROVIDER_MODELS.get(prov, [])
+        groups.append({
+            "provider": prov,
+            "label": PROVIDER_LABELS.get(prov, prov),
+            "models": [{"id": f"{prov}:{m}", "name": m} for m in models],
+        })
+    return {"groups": groups}
 
 
 # --- settings (per-user) ----------------------------------------------------

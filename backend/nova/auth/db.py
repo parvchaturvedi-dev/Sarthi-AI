@@ -130,10 +130,11 @@ _MG_COUNTERS = None
 _MG_CHATS = None
 _MG_MESSAGES = None
 _MG_TOKENS = None
+_MG_KEYS = None
 
 
 def _mg_init():
-    global _MG_READY, _MG_USERS, _MG_COUNTERS, _MG_CHATS, _MG_MESSAGES, _MG_TOKENS
+    global _MG_READY, _MG_USERS, _MG_COUNTERS, _MG_CHATS, _MG_MESSAGES, _MG_TOKENS, _MG_KEYS
     if _MG_READY:
         return
     import pymongo
@@ -154,11 +155,44 @@ def _mg_init():
     _MG_CHATS = db["chats"]
     _MG_MESSAGES = db["messages"]
     _MG_TOKENS = db["google_tokens"]
+    _MG_KEYS = db["api_keys"]
     _MG_USERS.create_index("email", unique=True)
     _MG_CHATS.create_index([("user_id", 1), ("updated_at", -1)])
     _MG_MESSAGES.create_index([("chat_id", 1), ("_id", 1)])
     _MG_TOKENS.create_index("user_id", unique=True)
+    _MG_KEYS.create_index([("user_id", 1), ("provider", 1)], unique=True)
     _MG_READY = True
+
+
+# --- API-key encryption (Fernet, symmetric) --------------------------------
+def _fernet():
+    """A Fernet cipher derived from KEYS_SECRET (falls back to JWT_SECRET)."""
+    import base64
+    import hashlib
+    from cryptography.fernet import Fernet
+
+    secret = os.getenv("KEYS_SECRET") or os.getenv("JWT_SECRET") or "dev-secret-change-me"
+    key = base64.urlsafe_b64encode(hashlib.sha256(secret.encode()).digest())
+    return Fernet(key)
+
+
+def _encrypt(plaintext: str) -> str:
+    try:
+        return "enc:" + _fernet().encrypt(plaintext.encode()).decode()
+    except Exception:
+        # cryptography missing / no secret -> store as-is (dev only)
+        return plaintext
+
+
+def _decrypt(stored: str) -> str:
+    if not stored:
+        return ""
+    if stored.startswith("enc:"):
+        try:
+            return _fernet().decrypt(stored[4:].encode()).decode()
+        except Exception:
+            return ""
+    return stored  # legacy plaintext
 
 
 def _mg_next_id() -> int:
@@ -338,3 +372,39 @@ def get_google_tokens(user_id: int) -> dict | None:
 def delete_google_tokens(user_id: int) -> None:
     _mg_init()
     _MG_TOKENS.delete_one({"user_id": int(user_id)})
+
+
+# --- per-user AI provider API keys (encrypted) -----------------------------
+def save_api_key(user_id: int, provider: str, api_key: str, model: str = "") -> None:
+    _mg_init()
+    from datetime import datetime, timezone
+    _MG_KEYS.update_one(
+        {"user_id": int(user_id), "provider": provider},
+        {"$set": {"api_key": _encrypt(api_key), "model": model,
+                  "updated_at": datetime.now(timezone.utc)}},
+        upsert=True,
+    )
+
+
+def delete_api_key(user_id: int, provider: str) -> None:
+    _mg_init()
+    _MG_KEYS.delete_one({"user_id": int(user_id), "provider": provider})
+
+
+def list_api_keys(user_id: int) -> list:
+    """Providers this user has saved a key for — WITHOUT the key value."""
+    _mg_init()
+    return [
+        {"provider": d["provider"], "model": d.get("model", "")}
+        for d in _MG_KEYS.find({"user_id": int(user_id)})
+    ]
+
+
+def get_api_key(user_id: int, provider: str) -> Optional[dict]:
+    """The decrypted key + model for one provider (server-side use only)."""
+    _mg_init()
+    d = _MG_KEYS.find_one({"user_id": int(user_id), "provider": provider})
+    if not d:
+        return None
+    return {"provider": provider, "api_key": _decrypt(d.get("api_key", "")),
+            "model": d.get("model", "")}

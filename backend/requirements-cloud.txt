@@ -12,6 +12,7 @@ python-dotenv
 pymongo[srv]>=4.10       # MongoDB driver — used when MONGODB_URI is set (Atlas)
 dnspython>=2.6           # Atlas SRV DNS lookup
 certifi>=2024.7.4        # up-to-date CA bundle so Atlas TLS handshake works
+cryptography             # Fernet encryption for per-user API keys at rest
 # Only needed if you connect a REAL Oracle DB via ORACLE_DSN (not the apex/ORDS
 # path, which uses plain HTTPS). Uncomment if you set ORACLE_* instead of ORDS.
 # oracledb
