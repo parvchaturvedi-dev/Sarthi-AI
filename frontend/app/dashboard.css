@@ -1,0 +1,144 @@
+/* Exact port of the :8760 light dashboard. Scoped under .app-shell so it
+   doesn't clash with the login/register pages. */
+.app-shell{
+  --ink:#1b2230; --muted:#8b91a1; --muted-2:#a3a9b6; --sub:#606776;
+  --line:#edeff3; --line-2:#e6e9ef; --row:#f2f4f7;
+  --hover:#f4f6f9; --active:#f1f4f8; --chip:#f6f7fa;
+  --accent:#2f7ff0; --accent-ink:#2a5fb8; --accent-soft:#d8e6fb;
+  --grad:linear-gradient(135deg,#2f7ff0,#2a6fd0);
+  --ai:linear-gradient(95deg,#7b5bff,#e05cc6);
+  --accent-shadow:rgba(47,127,240,.30);
+  height:100vh; display:flex; background:#fff; color:var(--ink); font-size:15px; overflow:hidden;
+  font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;
+}
+.app-shell *{box-sizing:border-box; margin:0; padding:0}
+.app-shell button,.app-shell input,.app-shell textarea{font-family:inherit}
+.app-shell ::-webkit-scrollbar{width:8px}
+.app-shell ::-webkit-scrollbar-thumb{background:#d7dbe3; border-radius:8px}
+.app-shell input::placeholder,.app-shell textarea::placeholder{color:#a7adba}
+.app-shell .hidden{display:none !important}
+
+/* SIDEBAR */
+.app-shell .side{width:282px; flex-shrink:0; background:#fff; border-right:1px solid var(--line);
+  display:flex; flex-direction:column; transition:width .2s ease}
+.app-shell.collapsed .side{width:76px}
+.app-shell.collapsed .side .lbl,
+.app-shell.collapsed .side .hist,
+.app-shell.collapsed .side .upgrade{display:none}
+.app-shell.collapsed .side .navitem{justify-content:center}
+.app-shell .brandrow{display:flex; align-items:center; gap:11px; padding:20px 18px 14px}
+.app-shell .logo{width:34px; height:34px; border-radius:8px; flex-shrink:0; object-fit:contain}
+.app-shell .brandrow .name{font-weight:800; font-size:16px; letter-spacing:-.01em}
+.app-shell .collapsebtn{margin-left:auto; width:26px; height:26px; border:none; background:none;
+  color:#9aa0ad; cursor:pointer; display:grid; place-items:center; border-radius:7px}
+.app-shell .collapsebtn:hover{background:#f2f4f8; color:var(--ink)}
+.app-shell.collapsed .collapsebtn svg{transform:scaleX(-1)}
+.app-shell nav{padding:6px 12px 0; display:flex; flex-direction:column; gap:3px}
+.app-shell .navitem{display:flex; align-items:center; gap:12px; padding:10px 14px; border-radius:10px;
+  font-size:14.5px; font-weight:500; white-space:nowrap; overflow:hidden; cursor:pointer;
+  color:var(--sub); text-decoration:none; transition:background .12s,color .12s}
+.app-shell .navitem:hover{background:var(--hover)}
+.app-shell .navitem.on{background:var(--active); color:var(--ink); font-weight:700}
+.app-shell .navitem .ic{width:20px; height:20px; flex-shrink:0; display:grid; place-items:center}
+.app-shell .hist{flex:1; overflow-y:auto; overflow-x:hidden; padding:8px 12px 12px; margin-top:6px}
+.app-shell .hist .lbl{padding:16px 12px 8px; font-size:12px; color:var(--muted-2); font-weight:700; letter-spacing:.02em}
+.app-shell .hist .item{padding:9px 12px; border-radius:9px; color:var(--sub); font-size:13.5px; font-weight:500;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer}
+.app-shell .hist .item:hover{background:var(--hover); color:var(--ink)}
+.app-shell .hist .item.on{background:var(--active); color:var(--ink)}
+.app-shell .upgrade{margin:0 14px 12px; padding:16px; border-radius:14px; background:#f5f7fa; border:1px solid var(--line)}
+.app-shell .upgrade .t{font-weight:700; font-size:13.5px; margin-bottom:2px}
+.app-shell .upgrade .d{color:#8b91a1; font-size:12.5px; margin-bottom:12px}
+.app-shell .upgrade button{width:100%; padding:9px; border:none; border-radius:999px; color:#fff;
+  font-weight:700; font-size:13.5px; cursor:pointer; background:var(--grad); box-shadow:0 4px 12px var(--accent-shadow)}
+.app-shell .upgrade button:hover{filter:brightness(1.05)}
+.app-shell .settingsrow{margin:0 12px 2px}
+.app-shell .userrow{display:flex; align-items:center; gap:10px; margin:6px 12px 12px; padding:8px 10px; border-top:1px solid var(--line)}
+.app-shell .userrow .uav{width:30px;height:30px;border-radius:50%;flex-shrink:0;background:var(--ai)}
+.app-shell .userrow .un{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.app-shell .userrow .out{font-size:11px;color:var(--muted);cursor:pointer}
+.app-shell .userrow .out:hover{color:var(--accent)}
+
+/* MAIN */
+.app-shell .main{flex:1; min-width:0; position:relative; display:flex; flex-direction:column;
+  background:linear-gradient(180deg,#fafcff,#ffffff 260px)}
+.app-shell .scroll{flex:1; overflow-y:auto}
+.app-shell .wrap{max-width:920px; margin:0 auto; padding:44px 36px 150px}
+.app-shell .hero{margin-bottom:30px}
+.app-shell .hero .hi{font-size:33px; font-weight:800; letter-spacing:-.02em; line-height:1.15; margin-bottom:4px}
+.app-shell .hero .hi mark{background:var(--accent-soft); color:var(--accent-ink); padding:1px 8px; border-radius:7px}
+.app-shell .hero .q{font-size:33px; font-weight:700; letter-spacing:-.02em; line-height:1.15; color:#aeb4c0}
+.app-shell .grid2{display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-bottom:18px}
+.app-shell .card{background:#fff; border:1px solid var(--line); border-radius:16px; padding:20px 22px; box-shadow:0 1px 2px rgba(16,24,40,.03)}
+.app-shell .card .ch{display:flex; align-items:center; gap:8px; color:var(--muted); font-size:13.5px; font-weight:600; margin-bottom:16px}
+.app-shell .card .row{display:flex; align-items:center; gap:11px; padding:6px 0; cursor:pointer; border-radius:8px}
+.app-shell .card .row:hover{background:#f7f9fc}
+.app-shell .card .fico{width:26px; height:26px; border-radius:7px; flex-shrink:0; display:grid; place-items:center; background:#eef3fb; color:#2f7ff0}
+.app-shell .card .fico svg{width:15px; height:15px}
+.app-shell .card .rt{font-size:14px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.app-shell .caps{display:flex; flex-direction:column; gap:12px}
+.app-shell .cap{display:flex; align-items:center; gap:11px; color:#4b5262; font-size:13.5px; font-weight:500}
+.app-shell .capic{width:30px; height:30px; border-radius:8px; flex-shrink:0; display:grid; place-items:center; background:#f2f8ff; color:#2f7ff0}
+.app-shell .capic svg{width:16px; height:16px}
+.app-shell .suggest{background:#fff; border:1px solid var(--line); border-radius:16px; padding:18px 22px 20px;
+  box-shadow:0 1px 2px rgba(16,24,40,.03); cursor:pointer; transition:border-color .15s,box-shadow .15s}
+.app-shell .suggest:hover{border-color:#d5dbe6; box-shadow:0 4px 14px rgba(16,24,40,.06)}
+.app-shell .suggest .ch{display:flex; align-items:center; gap:8px; color:var(--muted); font-size:13px; font-weight:600; margin-bottom:12px}
+.app-shell .suggest .st{font-size:17px; font-weight:700; letter-spacing:-.01em}
+.app-shell .spark{width:15px; height:15px; flex-shrink:0}
+/* chat */
+.app-shell .thread{max-width:820px; margin:0 auto; padding:34px 24px 20px; display:flex; flex-direction:column; gap:20px}
+.app-shell .msg{display:flex; gap:12px}
+.app-shell .msg.user{flex-direction:row-reverse}
+.app-shell .msg .av{width:30px; height:30px; border-radius:50%; flex-shrink:0}
+.app-shell .msg.user .av{background:linear-gradient(140deg,#8ea2ff,#5b6ee0)}
+.app-shell .msg.nova .av{background:var(--ai)}
+.app-shell .msg .bubble{padding:12px 16px; border-radius:16px; line-height:1.6; max-width:80%; font-size:14.5px}
+.app-shell .msg.user .bubble{background:#eef3fb; border-bottom-right-radius:5px}
+.app-shell .msg.nova .bubble{background:#f6f7fa; border-bottom-left-radius:5px}
+.app-shell .msg.nova .bubble.think{color:var(--muted); font-style:italic}
+.app-shell .bubble pre{background:#0e1524; color:#e6e9f2; border-radius:10px; padding:12px 14px; overflow-x:auto; margin:8px 0; font-family:"Cascadia Code",Consolas,monospace; font-size:13px}
+.app-shell .bubble code{font-family:"Cascadia Code",Consolas,monospace; font-size:.92em}
+/* composer */
+.app-shell .composer{position:absolute; left:0; right:0; bottom:0; padding:20px 36px 26px;
+  background:linear-gradient(to top,#fff 62%,rgba(255,255,255,0)); pointer-events:none}
+.app-shell .composer .inner{max-width:920px; margin:0 auto; pointer-events:auto}
+.app-shell .bar{display:flex; align-items:center; gap:14px; background:#fff; border:1px solid var(--line-2);
+  border-radius:999px; padding:11px 12px 11px 20px; box-shadow:0 8px 30px rgba(24,39,75,.10)}
+.app-shell .bar .plus{position:relative; flex-shrink:0; width:22px; height:22px; display:grid; place-items:center; cursor:pointer; color:#7b5bff}
+.app-shell .bar input{flex:1; min-width:0; border:none; background:none; outline:none; font-size:15px; color:var(--ink); padding:4px 0}
+.app-shell .iconbtn{flex-shrink:0; width:38px; height:38px; border-radius:50%; border:none; display:grid; place-items:center; cursor:pointer}
+.app-shell .iconbtn.ghost{background:var(--hover); color:#9aa0ad}
+.app-shell .iconbtn.ghost:hover{color:var(--accent)}
+.app-shell .iconbtn.send{color:#fff; background:var(--grad); box-shadow:0 4px 12px var(--accent-shadow)}
+.app-shell .iconbtn.send:hover{filter:brightness(1.06)}
+/* settings */
+.app-shell .settings{max-width:760px; margin:0 auto; padding:40px 36px}
+.app-shell .settings h1{font-size:26px; font-weight:800; letter-spacing:-.02em; margin-bottom:4px}
+.app-shell .settings .sub{color:var(--muted); margin-bottom:26px}
+.app-shell .sec{background:#fff; border:1px solid var(--line); border-radius:16px; padding:22px; margin-bottom:18px; box-shadow:0 1px 2px rgba(16,24,40,.03)}
+.app-shell .sec h2{font-size:15px; font-weight:700; margin-bottom:4px}
+.app-shell .sec p{color:var(--muted); font-size:13px; margin-bottom:16px}
+.app-shell .modes{display:flex; gap:14px}
+.app-shell .mode{flex:1; border:1.5px solid var(--line); border-radius:14px; padding:16px; cursor:pointer; transition:.15s}
+.app-shell .mode:hover{border-color:#cfd6e2}
+.app-shell .mode.on{border-color:var(--accent); background:#f2f8ff}
+.app-shell .mode .t{font-weight:700; margin-bottom:5px; display:flex; align-items:center; gap:8px}
+.app-shell .mode .d{color:var(--muted); font-size:12.5px; line-height:1.5}
+.app-shell .mdot{width:9px; height:9px; border-radius:50%; background:#cdd3df}
+.app-shell .mode.on .mdot{background:var(--accent); box-shadow:0 0 8px var(--accent-shadow)}
+.app-shell .conn{display:flex; align-items:center; gap:13px; padding:14px 0; border-top:1px solid var(--line)}
+.app-shell .conn:first-of-type{border-top:none}
+.app-shell .conn .cic{width:36px; height:36px; border-radius:10px; display:grid; place-items:center; background:#fff; border:1px solid var(--line)}
+.app-shell .conn .cic img{width:20px; height:20px}
+.app-shell .soon{margin-left:auto; font-size:11.5px; font-weight:700; color:#9aa0ad; background:var(--chip); padding:6px 13px; border-radius:999px}
+.app-shell .conn .cname{font-weight:700; font-size:13.5px}
+.app-shell .conn .cstat{font-size:12px; color:var(--muted)}
+.app-shell .conn.done .cstat{color:#12a18c}
+.app-shell .conn .cbtn{margin-left:auto; padding:8px 15px; border-radius:10px; font-size:12.5px; font-weight:700; cursor:pointer; color:#fff; border:none; background:var(--grad); box-shadow:0 4px 12px var(--accent-shadow)}
+.app-shell .conn .cbtn:hover{filter:brightness(1.05)}
+.app-shell .cform{display:none; padding:12px 2px 4px}
+.app-shell .cform.open{display:block}
+.app-shell .cform .hint{color:#7a808f; font-size:12px; line-height:1.75}
+.app-shell .cform code{background:var(--chip); padding:1px 6px; border-radius:5px}
+.app-shell a.link{color:var(--accent); text-decoration:none}

@@ -1,0 +1,46 @@
+{
+  "expo": {
+    "name": "Sarthi",
+    "slug": "sarthi",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/logo.png",
+    "userInterfaceStyle": "light",
+    "scheme": "sarthi",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#E9F2FF"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.sarthi.app"
+    },
+    "android": {
+      "package": "com.sarthi.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#E9F2FF",
+        "foregroundImage": "./assets/logo.png"
+      },
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.INTERNET"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/logo.png"
+    },
+    "plugins": [
+      "expo-asset",
+      "expo-font",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Sarthi uses the mic so you can talk to it."
+        }
+      ],
+      "expo-web-browser"
+    ]
+  }
+}
