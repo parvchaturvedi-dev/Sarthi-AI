@@ -133,24 +133,23 @@ def _mg_init():
     global _MG_READY, _MG_USERS, _MG_COUNTERS
     if _MG_READY:
         return
-    import certifi
     import pymongo
 
-    # Explicit CA bundle from certifi fixes the "TLSV1_ALERT_INTERNAL_ERROR"
-    # SSL handshake failure on most cloud containers, where the system OpenSSL
-    # cert store isn't populated the way Atlas expects.
-    kwargs = {
-        "serverSelectionTimeoutMS": 10000,
-        "tls": True,
-        "tlsCAFile": certifi.where(),
-    }
-    # Escape hatch for containers whose OpenSSL still refuses Atlas's TLS 1.3
-    # even with a good CA bundle (a well-known Render / Debian slim issue).
-    # Auth is still safe because the URI carries user+password over the tunnel.
-    if os.getenv("MONGODB_TLS_INSECURE", "").strip() in ("1", "true", "yes"):
-        kwargs["tlsAllowInvalidCertificates"] = True
-        kwargs["tlsAllowInvalidHostnames"] = True
-    client = pymongo.MongoClient(os.getenv("MONGODB_URI"), **kwargs)
+    uri = os.getenv("MONGODB_URI", "")
+    kwargs = {"serverSelectionTimeoutMS": 10000}
+    # Atlas (mongodb+srv://) needs TLS with a good CA bundle. Plain mongodb://
+    # (Railway TCP proxy, self-hosted, etc.) is plain TCP — no TLS.
+    if uri.startswith("mongodb+srv://"):
+        import certifi
+        kwargs["tls"] = True
+        kwargs["tlsCAFile"] = certifi.where()
+        # Escape hatch for cloud containers whose OpenSSL refuses Atlas TLS 1.3
+        # even with a good CA bundle. Password still travels over the encrypted
+        # tunnel; only cert VERIFICATION is skipped.
+        if os.getenv("MONGODB_TLS_INSECURE", "").strip() in ("1", "true", "yes"):
+            kwargs["tlsAllowInvalidCertificates"] = True
+            kwargs["tlsAllowInvalidHostnames"] = True
+    client = pymongo.MongoClient(uri, **kwargs)
     db = client[os.getenv("MONGODB_DB", "sarthi")]
     _MG_USERS = db["users"]
     _MG_COUNTERS = db["counters"]
