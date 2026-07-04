@@ -15,6 +15,7 @@ import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 try:
     from dotenv import load_dotenv
@@ -43,3 +44,64 @@ app.include_router(auth_router)
 def health():
     from nova.auth import db
     return {"app": "sarthi-auth", "ok": True, "accounts_backend": db.available()}
+
+
+# --- Portal stubs -----------------------------------------------------------
+# The deployed web frontend is the full chat dashboard, but the real assistant
+# (chat, PC control, vision, local models) runs on the user's OWN machine — it
+# can't run on this Linux server. Without these the dashboard 404s on load and
+# (by its own error handling) logs the user straight back out. So we answer the
+# few endpoints it hits with empty/portal responses: login works, the dashboard
+# loads, and chat explains where the assistant actually lives.
+
+_PORTAL_MSG = (
+    "You're signed in. Sarthi's assistant runs on your own PC (the desktop app) "
+    "or your phone — this website is just the account portal. Open the app there "
+    "to chat and control your device."
+)
+
+
+class _ChatIn(BaseModel):
+    text: str = ""
+    session_id: int | None = None
+
+
+@app.get("/api/session/current")
+def _session_current():
+    return {"id": 0, "turns": []}
+
+
+@app.get("/api/sessions")
+def _sessions():
+    return {"sessions": []}
+
+
+@app.post("/api/session/new")
+def _session_new():
+    return {"id": 0}
+
+
+@app.get("/api/session/{sid}")
+def _session_get(sid: int):
+    return {"id": sid, "turns": []}
+
+
+@app.post("/api/chat")
+def _chat(body: _ChatIn):
+    return {"session_id": 0, "replies": [_PORTAL_MSG], "pending": None}
+
+
+@app.get("/api/settings")
+def _settings():
+    return {"mode": "pc_control", "connectors": {"google": {"connected": False}},
+            "google_ready": False}
+
+
+@app.post("/api/settings")
+def _settings_set(body: dict | None = None):
+    return {"ok": True}
+
+
+@app.post("/api/connectors/google/connect")
+def _google_connect():
+    return {"error": "setup_needed"}
