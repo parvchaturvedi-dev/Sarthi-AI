@@ -34,16 +34,23 @@ def _base() -> str:
     return os.getenv("ORDS_BASE_URL", "").rstrip("/")
 
 
+def _ords_err(what, r):
+    return RuntimeError(f"ORDS {what} -> HTTP {r.status_code}: {(r.text or '')[:300]}")
+
+
 def _ords_register(email, name, pw_hash, provider):
     import requests
 
     r = requests.post(f"{_base()}/register",
                       json={"email": email, "name": name, "hash": pw_hash, "provider": provider},
                       timeout=25)
-    r.raise_for_status()
-    uid = r.json().get("id")
+    if not r.ok:
+        raise _ords_err("/register", r)
+    uid = (r.json() if r.text else {}).get("id")
     if uid in (-1, "-1"):
         raise ValueError("That email is already registered")
+    if uid is None:
+        raise _ords_err("/register (no id in response)", r)
     return int(uid)
 
 
@@ -67,8 +74,12 @@ def _ords_upsert_google(email, name):
     import requests
 
     r = requests.post(f"{_base()}/google", json={"email": email, "name": name}, timeout=25)
-    r.raise_for_status()
-    return int(r.json().get("id"))
+    if not r.ok:
+        raise _ords_err("/google", r)
+    uid = (r.json() if r.text else {}).get("id")
+    if uid is None:
+        raise _ords_err("/google (no id in response)", r)
+    return int(uid)
 
 
 # ============================ python-oracledb (direct) ======================
