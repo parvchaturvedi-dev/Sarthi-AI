@@ -9,6 +9,7 @@ PyJWT
 bcrypt
 google-auth
 python-dotenv
+psycopg2-binary          # PostgreSQL driver — used when DATABASE_URL is set (Render Postgres)
 # Only needed if you connect a REAL Oracle DB via ORACLE_DSN (not the apex/ORDS
 # path, which uses plain HTTPS). Uncomment if you set ORACLE_* instead of ORDS.
 # oracledb
