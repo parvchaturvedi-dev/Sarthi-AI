@@ -231,37 +231,32 @@ def _ora_upsert_google(email, name):
 
 
 # ============================ dispatch ======================================
+# When ORDS/Oracle is configured we go THERE — no silent SQLite fallback (that
+# was hiding real ORDS errors and saving users to an ephemeral local file that
+# gets wiped on every Render restart). SQLite is only used when no accounts
+# backend is configured at all (pure local/dev).
 def register_user(email: str, name: str, pw_hash: str, provider: str = "local") -> int:
     mode = _mode()
-    if not mode:
-        return local_store.register(email, name, pw_hash, provider)
-    try:
-        if mode == "ords":
-            return _ords_register(email, name, pw_hash, provider)
+    if mode == "ords":
+        return _ords_register(email, name, pw_hash, provider)
+    if mode == "oracle":
         return _ora_register(email, name, pw_hash, provider)
-    except Exception:
-        return local_store.register(email, name, pw_hash, provider)
+    return local_store.register(email, name, pw_hash, provider)
 
 
 def get_user(email: str) -> Optional[dict]:
     mode = _mode()
-    if not mode:
-        return local_store.get(email)
-    try:
-        if mode == "ords":
-            return _ords_get_user(email)
+    if mode == "ords":
+        return _ords_get_user(email)
+    if mode == "oracle":
         return _ora_get_user(email)
-    except Exception:
-        return local_store.get(email)
+    return local_store.get(email)
 
 
 def upsert_google(email: str, name: str) -> int:
     mode = _mode()
-    if not mode:
-        return local_store.upsert_google(email, name)
-    try:
-        if mode == "ords":
-            return _ords_upsert_google(email, name)
+    if mode == "ords":
+        return _ords_upsert_google(email, name)
+    if mode == "oracle":
         return _ora_upsert_google(email, name)
-    except Exception:
-        return local_store.upsert_google(email, name)
+    return local_store.upsert_google(email, name)
