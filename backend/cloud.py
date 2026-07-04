@@ -6,7 +6,7 @@ so a deployed frontend can sign users in and gets a real HTTPS origin for Google
 Sign-In. PC control / voice / vision / local models stay on the user's own PC.
 
 Run:  uvicorn cloud:app --host 0.0.0.0 --port $PORT
-Env:  JWT_SECRET, ORDS_BASE_URL (apex), GOOGLE_LOGIN_CLIENT_ID
+Env:  JWT_SECRET, MONGODB_URI (Atlas), GOOGLE_LOGIN_CLIENT_ID
 """
 
 from __future__ import annotations
