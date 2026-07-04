@@ -20,10 +20,10 @@ from typing import Optional
 
 
 def _mode() -> Optional[str]:
-    # Postgres takes priority — Render Postgres is the reliable production path
-    # (same-region, low-latency). ORDS/Oracle are fallbacks; SQLite is local dev.
-    if os.getenv("DATABASE_URL"):
-        return "postgres"
+    # MongoDB takes priority — MongoDB Atlas is the reliable production path
+    # (managed, global, free tier). ORDS/Oracle are fallbacks; SQLite is local dev.
+    if os.getenv("MONGODB_URI"):
+        return "mongo"
     if os.getenv("ORDS_BASE_URL"):
         return "ords"
     if os.getenv("ORACLE_DSN"):
@@ -129,95 +129,91 @@ class _LocalAuthStore:
 local_store = _LocalAuthStore()
 
 
-# ============================ Postgres (Render / Supabase / Neon) ===========
-# Reliable production path. Set DATABASE_URL to a postgres:// URL and it just
-# works — no ORDS, no timeouts, no cold starts, same-region latency.
+# ============================ MongoDB (Atlas / self-hosted) ================
+# Managed, global, generous free tier (Atlas M0 = 512 MB). Set MONGODB_URI to
+# the SRV connection string and it just works — auto-creates the collection,
+# unique index on email, atomic counter for numeric user ids (kept int so the
+# JWT `sub` and the rest of the code don't change shape).
 
-_PG_READY = False
-
-
-def _pg_conn():
-    import psycopg2
-
-    dsn = os.getenv("DATABASE_URL", "")
-    # psycopg2 wants postgresql:// (some providers still hand out postgres://).
-    if dsn.startswith("postgres://"):
-        dsn = "postgresql://" + dsn[len("postgres://"):]
-    # Managed providers all require TLS. Render's INTERNAL URL doesn't, but this
-    # is safe either way (managed servers accept require).
-    kwargs = {"connect_timeout": 10}
-    if "sslmode=" not in dsn:
-        kwargs["sslmode"] = "require"
-    return psycopg2.connect(dsn, **kwargs)
+_MG_READY = False
+_MG_USERS = None
+_MG_COUNTERS = None
 
 
-def _pg_init():
-    """Auto-create the users table on first use (idempotent)."""
-    global _PG_READY
-    if _PG_READY:
+def _mg_init():
+    global _MG_READY, _MG_USERS, _MG_COUNTERS
+    if _MG_READY:
         return
-    with _pg_conn() as con:
-        with con.cursor() as cur:
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS nova_users (
-                  id            SERIAL PRIMARY KEY,
-                  email         TEXT NOT NULL UNIQUE,
-                  name          TEXT,
-                  password_hash TEXT,
-                  provider      TEXT NOT NULL DEFAULT 'local',
-                  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
-                )
-            """)
-        con.commit()
-    _PG_READY = True
+    import pymongo
+
+    client = pymongo.MongoClient(
+        os.getenv("MONGODB_URI"), serverSelectionTimeoutMS=10000,
+    )
+    db_name = os.getenv("MONGODB_DB", "sarthi")
+    db = client[db_name]
+    _MG_USERS = db["users"]
+    _MG_COUNTERS = db["counters"]
+    _MG_USERS.create_index("email", unique=True)
+    _MG_READY = True
 
 
-def _pg_register(email, name, pw_hash, provider):
-    _pg_init()
+def _mg_next_id() -> int:
+    """Atomic auto-incrementing numeric id — keeps user.id an int like SQL did."""
+    from pymongo import ReturnDocument
+    r = _MG_COUNTERS.find_one_and_update(
+        {"_id": "user_id"},
+        {"$inc": {"seq": 1}},
+        upsert=True,
+        return_document=ReturnDocument.AFTER,
+    )
+    return int(r["seq"])
+
+
+def _mg_register(email, name, pw_hash, provider):
+    _mg_init()
+    from datetime import datetime, timezone
+    from pymongo.errors import DuplicateKeyError
+
     email = email.lower()
-    with _pg_conn() as con:
-        with con.cursor() as cur:
-            cur.execute(
-                "INSERT INTO nova_users(email, name, password_hash, provider) "
-                "VALUES(%s, %s, %s, %s) "
-                "ON CONFLICT(email) DO NOTHING RETURNING id",
-                (email, name, pw_hash, provider),
-            )
-            row = cur.fetchone()
-        con.commit()
-    if row is None:
+    uid = _mg_next_id()
+    try:
+        _MG_USERS.insert_one({
+            "_id": uid, "email": email, "name": name,
+            "password_hash": pw_hash, "provider": provider,
+            "created_at": datetime.now(timezone.utc),
+        })
+    except DuplicateKeyError:
         raise ValueError("That email is already registered")
-    return int(row[0])
+    return uid
 
 
-def _pg_get_user(email):
-    _pg_init()
-    with _pg_conn() as con:
-        with con.cursor() as cur:
-            cur.execute(
-                "SELECT id, name, password_hash, provider FROM nova_users "
-                "WHERE email = %s", (email.lower(),),
-            )
-            row = cur.fetchone()
-    if not row:
+def _mg_get_user(email):
+    _mg_init()
+    doc = _MG_USERS.find_one({"email": email.lower()})
+    if not doc:
         return None
-    return {"id": int(row[0]), "email": email.lower(), "name": row[1],
-            "password_hash": row[2], "provider": row[3]}
+    return {
+        "id": int(doc["_id"]), "email": doc["email"], "name": doc.get("name"),
+        "password_hash": doc.get("password_hash"), "provider": doc.get("provider"),
+    }
 
 
-def _pg_upsert_google(email, name):
-    _pg_init()
+def _mg_upsert_google(email, name):
+    _mg_init()
+    from datetime import datetime, timezone
+
     email = email.lower()
-    with _pg_conn() as con:
-        with con.cursor() as cur:
-            cur.execute(
-                "INSERT INTO nova_users(email, name, provider) VALUES(%s, %s, 'google') "
-                "ON CONFLICT(email) DO UPDATE SET name = EXCLUDED.name RETURNING id",
-                (email, name),
-            )
-            row = cur.fetchone()
-        con.commit()
-    return int(row[0])
+    existing = _MG_USERS.find_one({"email": email})
+    if existing:
+        if name and name != existing.get("name"):
+            _MG_USERS.update_one({"_id": existing["_id"]}, {"$set": {"name": name}})
+        return int(existing["_id"])
+    uid = _mg_next_id()
+    _MG_USERS.insert_one({
+        "_id": uid, "email": email, "name": name, "provider": "google",
+        "created_at": datetime.now(timezone.utc),
+    })
+    return uid
 
 
 # ============================ ORDS (apex.oracle.com) ========================
@@ -357,8 +353,8 @@ def _ora_upsert_google(email, name):
 # backend is configured at all (pure local/dev).
 def register_user(email: str, name: str, pw_hash: str, provider: str = "local") -> int:
     mode = _mode()
-    if mode == "postgres":
-        return _pg_register(email, name, pw_hash, provider)
+    if mode == "mongo":
+        return _mg_register(email, name, pw_hash, provider)
     if mode == "ords":
         return _ords_register(email, name, pw_hash, provider)
     if mode == "oracle":
@@ -368,8 +364,8 @@ def register_user(email: str, name: str, pw_hash: str, provider: str = "local") 
 
 def get_user(email: str) -> Optional[dict]:
     mode = _mode()
-    if mode == "postgres":
-        return _pg_get_user(email)
+    if mode == "mongo":
+        return _mg_get_user(email)
     if mode == "ords":
         return _ords_get_user(email)
     if mode == "oracle":
@@ -379,8 +375,8 @@ def get_user(email: str) -> Optional[dict]:
 
 def upsert_google(email: str, name: str) -> int:
     mode = _mode()
-    if mode == "postgres":
-        return _pg_upsert_google(email, name)
+    if mode == "mongo":
+        return _mg_upsert_google(email, name)
     if mode == "ords":
         return _ords_upsert_google(email, name)
     if mode == "oracle":
