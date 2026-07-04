@@ -134,12 +134,41 @@ def _ords_err(what, r):
     return RuntimeError(f"ORDS {what} -> HTTP {r.status_code}: {(r.text or '')[:300]}")
 
 
-def _ords_register(email, name, pw_hash, provider):
+# apex.oracle.com's free tier can be slow (multi-second cold responses) and
+# Render <-> Oracle inter-region latency adds more. Give it real breathing room
+# via a (connect, read) tuple and one automatic retry on timeout / connection
+# errors. Overridable via env for tuning without a code push.
+_ORDS_TIMEOUT = (
+    float(os.getenv("ORDS_CONNECT_TIMEOUT", "10")),
+    float(os.getenv("ORDS_READ_TIMEOUT", "60")),
+)
+_ORDS_RETRIES = int(os.getenv("ORDS_RETRIES", "2"))
+
+
+def _ords_request(method, path, **kwargs):
+    """HTTP call to ORDS with retry-on-timeout — apex is often slow the first time."""
+    import time
     import requests
 
-    r = requests.post(f"{_base()}/register",
-                      json={"email": email, "name": name, "hash": pw_hash, "provider": provider},
-                      timeout=25)
+    kwargs.setdefault("timeout", _ORDS_TIMEOUT)
+    url = f"{_base()}{path}"
+    last_err = None
+    for attempt in range(_ORDS_RETRIES + 1):
+        try:
+            return requests.request(method, url, **kwargs)
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+            last_err = e
+            if attempt < _ORDS_RETRIES:
+                time.sleep(1.0 * (attempt + 1))     # gentle backoff
+                continue
+            raise
+
+
+def _ords_register(email, name, pw_hash, provider):
+    r = _ords_request(
+        "POST", "/register",
+        json={"email": email, "name": name, "hash": pw_hash, "provider": provider},
+    )
     if not r.ok:
         raise _ords_err("/register", r)
     # The ORDS plsql/block handler inserts the row but returns an EMPTY body
@@ -151,9 +180,7 @@ def _ords_register(email, name, pw_hash, provider):
 
 
 def _ords_get_user(email):
-    import requests
-
-    r = requests.get(f"{_base()}/user", params={"email": email}, timeout=25)
+    r = _ords_request("GET", "/user", params={"email": email})
     if r.status_code == 404:
         return None
     r.raise_for_status()
@@ -167,11 +194,9 @@ def _ords_get_user(email):
 
 
 def _ords_upsert_google(email, name):
-    import requests
-
     # The /google plsql/block handler upserts the user but returns an EMPTY body,
     # so read the id back from /user (which returns proper JSON).
-    r = requests.post(f"{_base()}/google", json={"email": email, "name": name}, timeout=25)
+    r = _ords_request("POST", "/google", json={"email": email, "name": name})
     if not r.ok:
         raise _ords_err("/google", r)
     u = _ords_get_user(email)
